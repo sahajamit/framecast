@@ -1,0 +1,191 @@
+/* ============================================================
+   framecast · CONSOLE — design tokens          (deliverable #1)
+   ------------------------------------------------------------
+   :root            = dark theme (default)
+   [data-theme="light"]   = light theme — COLOR overrides only.
+   Type, spacing, radii, motion are theme-invariant by design.
+
+   Wire into Tailwind v4 via @theme inline; every value below is
+   a plain custom property with a semantic name. Video surfaces
+   (--color-video*) are intentionally NOT overridden in light:
+   video always sits on near-black, the chrome flips around it.
+   Red family (--color-rec*) is reserved for record/stop/danger
+   and must never be used for anything else.
+   ============================================================ */
+
+:root,
+.force-dark {
+  /* ---- background ramp · warm charcoal, deep → raised ---- */
+  --color-bg-deep:   #0d0b0a;
+  --color-bg:        #131110;
+  --color-bg-2:      #181513;
+  --color-surface:   #1c1916;
+  --color-raised:    #242019;
+  --color-raised-2:  #2e2820;
+
+  /* ---- lines & bevels (hardware edges) ---- */
+  --color-line:        rgba(240,232,216,0.09);
+  --color-line-strong: rgba(240,232,216,0.18);
+  --bevel-top:         rgba(255,250,238,0.07);
+  --bevel-bot:         rgba(0,0,0,0.50);
+
+  /* ---- ink hierarchy · cream silkscreen ---- */
+  --color-ink:    #f0e8d8;
+  --color-ink-2:  #a89e8c;
+  --color-ink-3:  #756c5c;
+
+  /* ---- interactive accent · LED green (never red) ---- */
+  --color-accent:          oklch(0.82 0.17 145);
+  --color-accent-strong:   oklch(0.88 0.19 145);
+  --color-accent-dim:      oklch(0.55 0.12 145);
+  --color-accent-ghost:    oklch(0.82 0.17 145 / 0.12);
+  --color-accent-contrast: #141210;          /* text/icon on accent fill */
+
+  /* ---- recording signal · reserved red family ---- */
+  --color-rec:          oklch(0.60 0.23 25);
+  --color-rec-hot:      oklch(0.68 0.24 25);
+  --color-rec-dim:      oklch(0.42 0.17 25);
+  --color-rec-ghost:    oklch(0.60 0.23 25 / 0.14);
+  --color-rec-contrast: #ffe9e4;             /* icon on rec fill */
+
+  /* ---- status ---- */
+  --color-ok:       var(--color-accent);
+  --color-warn:     oklch(0.80 0.16 80);
+  --color-warn-dim: oklch(0.55 0.12 80);
+
+  /* ---- video surfaces · theme-invariant near-black ---- */
+  --color-video:      #0a0908;
+  --color-video-2:    #11100d;
+  --color-video-edge: rgba(0,0,0,0.60);
+
+  /* ---- inset slots (faders, selects, meters, wells) ---- */
+  --surface-slot: rgba(0,0,0,0.40);
+  --vu-off:       rgba(240,232,216,0.08);
+
+  /* ---- shadows ---- */
+  --shadow-ambient: rgba(0,0,0,0.55);
+  --shadow-module:  inset 0 1px 0 var(--bevel-top), 0 8px 22px -8px var(--shadow-ambient);
+  --shadow-slot:    inset 0 2px 5px rgba(0,0,0,0.55);
+  --shadow-knob:    inset 0 1px 0 rgba(255,250,238,0.15), 0 3px 6px rgba(0,0,0,0.60);
+  --shadow-pop:     inset 0 1px 0 var(--bevel-top), 0 18px 50px -12px rgba(0,0,0,0.80);
+
+  /* ---- module / knob fills ---- */
+  --grad-module: linear-gradient(180deg, var(--color-raised), var(--color-surface));
+  --grad-knob:   linear-gradient(180deg, #3a342b, #262019);
+  --grad-rec:    linear-gradient(180deg, oklch(0.50 0.20 25), oklch(0.38 0.17 25));
+  --grad-rec-on: linear-gradient(180deg, oklch(0.62 0.23 25), oklch(0.48 0.20 25));
+
+  /* ---- texture ---- */
+  --grain-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.95 0 0 0 0 0.85 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain-opacity: 0.6;
+  --halo: radial-gradient(1400px 700px at 50% -20%, rgba(255,220,160,0.04), transparent 60%);
+
+  /* ---- focus (keyboard) ---- */
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
+
+  /* ============================================================
+     THEME-INVARIANT TOKENS
+     ============================================================ */
+
+  /* ---- type ---- */
+  --font-display: "Big Shoulders Display", sans-serif;   /* engraving / headings */
+  --font-ui:      "Familjen Grotesk", sans-serif;        /* body / controls */
+  --font-mono:    "IBM Plex Mono", monospace;            /* readouts / labels */
+
+  --text-2xs: 9.5px;     /* engraved micro-labels, mono only */
+  --text-xs:  10.5px;    /* mono labels, captions */
+  --text-sm:  12.5px;    /* ui small */
+  --text-md:  13.5px;    /* ui body */
+  --text-lg:  16px;      /* ui emphasized */
+  --text-xl:  20px;      /* display small */
+  --text-2xl: 26px;      /* display module heading */
+  --text-3xl: 38px;      /* display screen heading */
+  --text-jumbo: 112px;   /* countdown / on-air timecode */
+
+  --track-wide:  0.14em; /* mono label tracking */
+  --track-wider: 0.22em; /* engraving tracking */
+
+  /* ---- spacing ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 22px;
+  --space-6: 28px;
+  --space-7: 36px;
+  --space-8: 48px;
+
+  /* ---- radii ---- */
+  --radius-1: 4px;       /* chips, small buttons */
+  --radius-2: 6px;       /* slots, selects, stage */
+  --radius-3: 8px;       /* buttons, nav */
+  --radius-4: 10px;      /* modules */
+  --radius-5: 14px;      /* monitor shell */
+  --radius-round: 999px;
+
+  /* ---- motion ---- */
+  --t-tap:  90ms;        /* switches, presses — snap, no flourish */
+  --t-ui:   120ms;       /* hovers, fades */
+  --t-move: 240ms;       /* layout shifts, drawer/toast entry */
+  --t-beat: 1000ms;      /* countdown tally beat — mechanical */
+  --ease-out:  cubic-bezier(0.20, 0.70, 0.30, 1);
+  --ease-mech: cubic-bezier(0.70, 0, 0.30, 1);
+}
+
+/* ============================================================
+   LIGHT THEME · "daylight studio" — same hardware, lights on.
+   Warm paper, ivory modules, ink-charcoal silkscreen.
+   LEDs deepen to hold AA contrast. Video stays near-black.
+   ============================================================ */
+[data-theme="light"] {
+  --color-bg-deep:   #e2dac9;
+  --color-bg:        #ece5d6;
+  --color-bg-2:      #efe9db;
+  --color-surface:   #f6f1e6;
+  --color-raised:    #fbf7ee;
+  --color-raised-2:  #fffdf6;
+
+  --color-line:        rgba(42,37,30,0.12);
+  --color-line-strong: rgba(42,37,30,0.24);
+  --bevel-top:         rgba(255,255,255,0.85);
+  --bevel-bot:         rgba(42,37,30,0.18);
+
+  --color-ink:    #26211a;
+  --color-ink-2:  #5d564a;
+  --color-ink-3:  #6f6757;
+
+  --color-accent:          oklch(0.50 0.13 145);
+  --color-accent-strong:   oklch(0.43 0.13 145);
+  --color-accent-dim:      oklch(0.68 0.10 145);
+  --color-accent-ghost:    oklch(0.50 0.13 145 / 0.12);
+  --color-accent-contrast: #f8f4ea;
+
+  --color-rec:          oklch(0.55 0.22 25);
+  --color-rec-hot:      oklch(0.62 0.23 25);
+  --color-rec-dim:      oklch(0.72 0.12 25);
+  --color-rec-ghost:    oklch(0.55 0.22 25 / 0.14);
+  --color-rec-contrast: #ffe9e4;
+
+  --color-warn:     oklch(0.58 0.13 80);
+  --color-warn-dim: oklch(0.75 0.10 80);
+
+  --surface-slot: rgba(42,37,30,0.08);
+  --vu-off:       rgba(42,37,30,0.10);
+
+  --shadow-ambient: rgba(70,58,40,0.28);
+  --shadow-module:  inset 0 1px 0 var(--bevel-top), 0 8px 22px -10px var(--shadow-ambient);
+  --shadow-slot:    inset 0 2px 5px rgba(42,37,30,0.18);
+  --shadow-knob:    inset 0 1px 0 rgba(255,255,255,0.70), 0 3px 6px rgba(70,58,40,0.35);
+  --shadow-pop:     inset 0 1px 0 var(--bevel-top), 0 18px 50px -14px rgba(70,58,40,0.45);
+
+  --grad-module: linear-gradient(180deg, var(--color-raised-2), var(--color-surface));
+  --grad-knob:   linear-gradient(180deg, #fffdf6, #e8e1d1);
+  --grad-rec:    linear-gradient(180deg, oklch(0.60 0.22 25), oklch(0.50 0.20 25));
+  --grad-rec-on: linear-gradient(180deg, oklch(0.66 0.23 25), oklch(0.56 0.21 25));
+
+  --grain-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.16 0 0 0 0 0.13 0 0 0 0 0.09 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain-opacity: 0.5;
+  --halo: radial-gradient(1400px 700px at 50% -20%, rgba(255,250,235,0.70), transparent 60%);
+
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
+}

@@ -6,8 +6,9 @@ import { downloadFile } from '../library/fileOps';
 import { convertRecording } from '../convert/exportFile';
 import { trimRecording } from '../convert/trim';
 import { enhanceRecording } from '../enhance/enhanceAudio';
-import { ProgressBar } from '../ui/controls';
+import { Lamp, Module, ProgressBar, Timecode } from '../ui/controls';
 import { formatDuration } from '../library/thumbs';
+import { formatSize } from '../library/scan';
 import { ALL_FORMATS, BlobSource, CanvasSink, Input } from 'mediabunny';
 import type { ExportFormat } from '../types';
 
@@ -20,6 +21,7 @@ export function ReviewScreen() {
   const reviewFileName = useStore((s) => s.session.reviewFileName);
   const audioCodec = useStore((s) => s.devices.audioCodec);
   const storageMode = useStore((s) => s.library.mode);
+  const dirName = useStore((s) => s.library.dirName);
 
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -61,8 +63,9 @@ export function ReviewScreen() {
         if (!track || !(await track.canDecode())) return;
         const strip = stripRef.current;
         if (!strip) return;
-        const ctx = strip.getContext('2d')!;
-        const slots = 8;
+        const ctx = strip.getContext('2d');
+        if (!ctx) return;
+        const slots = 10;
         const slotW = strip.width / slots;
         const sink = new CanvasSink(track, { width: Math.ceil(slotW), fit: 'cover' });
         for (let i = 0; i < slots && !cancelled; i++) {
@@ -92,9 +95,7 @@ export function ReviewScreen() {
   async function withBusy(label: string, run: (p: (f: number, l?: string) => void) => Promise<void>) {
     setBusy({ label, progress: 0 });
     try {
-      await run((fraction, newLabel) =>
-        setBusy({ label: newLabel ?? label, progress: fraction }),
-      );
+      await run((fraction, newLabel) => setBusy({ label: newLabel ?? label, progress: fraction }));
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Operation failed.');
     } finally {
@@ -109,121 +110,155 @@ export function ReviewScreen() {
     openInReview(handle, outName);
   };
 
-  return (
-    <div className="max-w-[860px] mx-auto flex flex-col gap-4 rise-in relative">
-      <div className="flex items-baseline justify-between">
-        <h2 className="font-display font-semibold text-lg truncate">{reviewFileName}</h2>
-        <span className="label-mono shrink-0">
-          {formatDuration(duration)} · saved to {useStore.getState().library.dirName ?? 'folder'}
-        </span>
-      </div>
+  const inPct = duration > 0 ? (trimIn / duration) * 100 : 0;
+  const outPct = duration > 0 ? (effOut / duration) * 100 : 100;
 
-      <div className="viewfinder">
-        <div className="vf-b" />
-        {url && (
-          <video
-            ref={videoRef}
-            src={url}
-            controls
-            className="w-full rounded-sm border border-line bg-black aspect-video"
-            onLoadedMetadata={(e) => {
-              const d = e.currentTarget.duration;
-              if (isFinite(d)) {
-                setDuration(d);
-                setTrimOut(d);
+  return (
+    <div className="grid lg:grid-cols-[1fr_336px] gap-5 items-start rise-in relative">
+      {/* playback monitor */}
+      <div className="monitor">
+        <div className="monitor-head">
+          <span className="take-title">
+            Take <em>review</em>
+          </span>
+          <span className="src-read">{reviewFileName}</span>
+          <div className="monitor-actions">
+            <button type="button" className="btn-s" onClick={backToPreflight}>
+              New take
+            </button>
+            <button
+              type="button"
+              className="btn-s danger"
+              onClick={() =>
+                void (async () => {
+                  if (!dir) return;
+                  await dir.removeEntry(reviewFileName).catch(() => {});
+                  await refreshLibrary();
+                  backToPreflight();
+                })()
               }
-            }}
-          />
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+        <div className="stage force-dark">
+          {url && (
+            <video
+              ref={videoRef}
+              src={url}
+              controls
+              onLoadedMetadata={(e) => {
+                const d = e.currentTarget.duration;
+                if (isFinite(d)) {
+                  setDuration(d);
+                  setTrimOut(d);
+                }
+              }}
+            />
+          )}
+        </div>
+        <div className="monitor-strip">
+          <span className="ok">● Saved</span>
+          <span className="sep" />
+          <span className="truncate">{dirName ?? 'on disk'}</span>
+          <span className="flex-1" />
+          <Timecode>{formatDuration(duration)}</Timecode>
+        </div>
+
+        {/* trim deck */}
+        {duration > 0 && (
+          <div className="mt-4">
+            <div className="mod-label" style={{ marginBottom: 8 }}>
+              <b>Trim</b>
+              <span className="no">IN/OUT</span>
+              <span className="val">{formatDuration(Math.max(0, effOut - trimIn))} kept</span>
+            </div>
+            <div className="trim-well force-dark">
+              <div className="trim-strip">
+                <canvas ref={stripRef} width={900} height={44} />
+              </div>
+              <div className="trim-dim" style={{ left: 0, width: `${inPct}%` }} />
+              <div className="trim-dim" style={{ right: 0, width: `${Math.max(0, 100 - outPct)}%` }} />
+              <div className="trim-rail" style={{ top: 8, left: `${inPct}%`, right: `${100 - outPct}%` }} />
+              <div className="trim-rail" style={{ bottom: 8, left: `${inPct}%`, right: `${100 - outPct}%` }} />
+              <input
+                type="range"
+                className="trim-range"
+                aria-label="Trim in point"
+                min={0}
+                max={duration}
+                step={0.05}
+                value={trimIn}
+                onChange={(e) => {
+                  const v = Math.min(Number(e.target.value), effOut - 0.2);
+                  setTrimIn(Math.max(0, v));
+                  seek(v);
+                }}
+              />
+              <input
+                type="range"
+                className="trim-range"
+                aria-label="Trim out point"
+                min={0}
+                max={duration}
+                step={0.05}
+                value={effOut}
+                onChange={(e) => {
+                  const v = Math.max(Number(e.target.value), trimIn + 0.2);
+                  setTrimOut(Math.min(duration, v));
+                  seek(v);
+                }}
+              />
+            </div>
+            <div className="flex items-center gap-5 mt-2.5">
+              <span className="hint">
+                IN <b style={{ color: 'var(--color-accent)' }}>{fmtT(trimIn)}</b>
+              </span>
+              <span className="hint">
+                OUT <b style={{ color: 'var(--color-accent)' }}>{fmtT(effOut)}</b>
+              </span>
+              <span className="flex-1" />
+              {trimmed && (
+                <>
+                  <span className="hint">
+                    {trimIn > 0.05 ? 'Head cut re-encodes on-device' : 'Tail cut · instant copy'}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-s accent"
+                    onClick={() =>
+                      void withBusy('Trimming', async (p) => {
+                        if (!file || !dir) return;
+                        const { outName } = await trimRecording(
+                          file,
+                          reviewFileName,
+                          dir,
+                          { start: trimIn, end: effOut },
+                          (f) => p(f),
+                        );
+                        await openOutput(outName);
+                      })
+                    }
+                  >
+                    ✂ Apply trim
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
-      {/* trim */}
-      {duration > 0 && (
-        <div className="panel p-3.5 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <span className="label-mono">trim</span>
-            <span className="font-mono text-[11px] text-mute">
-              in {fmtT(trimIn)} · out {fmtT(effOut)} · keeps {fmtT(Math.max(0, effOut - trimIn))}
-            </span>
-          </div>
-          <div className="relative h-14 rounded-md overflow-hidden border border-line">
-            <canvas ref={stripRef} width={800} height={56} className="absolute inset-0 w-full h-full" />
-            <div
-              className="absolute inset-y-0 left-0 bg-black/70 border-r-2 border-accent"
-              style={{ width: `${(trimIn / duration) * 100}%` }}
-            />
-            <div
-              className="absolute inset-y-0 right-0 bg-black/70 border-l-2 border-accent"
-              style={{ width: `${Math.max(0, (1 - effOut / duration) * 100)}%` }}
-            />
-            <input
-              type="range"
-              className="trim-range"
-              min={0}
-              max={duration}
-              step={0.05}
-              value={trimIn}
-              onChange={(e) => {
-                const v = Math.min(Number(e.target.value), effOut - 0.2);
-                setTrimIn(Math.max(0, v));
-                seek(v);
-              }}
-            />
-            <input
-              type="range"
-              className="trim-range"
-              min={0}
-              max={duration}
-              step={0.05}
-              value={effOut}
-              onChange={(e) => {
-                const v = Math.max(Number(e.target.value), trimIn + 0.2);
-                setTrimOut(Math.min(duration, v));
-                seek(v);
-              }}
-            />
-          </div>
-          {trimmed && (
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[12px] text-mute">
-                {trimIn > 0.05
-                  ? 'Cutting the head re-encodes (hardware, faster than realtime).'
-                  : 'Tail-only cut — instant, no re-encode.'}
-              </span>
-              <button
-                type="button"
-                className="hairline-btn"
-                onClick={() =>
-                  void withBusy('Trimming', async (p) => {
-                    if (!file || !dir) return;
-                    const { outName } = await trimRecording(
-                      file,
-                      reviewFileName,
-                      dir,
-                      { start: trimIn, end: effOut },
-                      (f) => p(f),
-                    );
-                    await openOutput(outName);
-                  })
-                }
-              >
-                ✂ apply trim
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* actions */}
-      <div className="grid sm:grid-cols-2 gap-3">
-        <div className="panel p-3.5 flex flex-col gap-2.5">
-          <span className="label-mono">download / convert</span>
-          <div className="grid grid-cols-3 gap-2">
+      {/* rail */}
+      <aside className="flex flex-col gap-3">
+        <Module title="Export" no="OUT·01">
+          <div className="seg">
             {(['mp4', 'webm', 'mov'] as ExportFormat[]).map((format) => (
               <button
                 key={format}
                 type="button"
-                className="hairline-btn"
+                className={format === currentExt ? 'on' : ''}
                 onClick={() => {
                   if (format === currentExt) {
                     if (file) downloadFile(file, reviewFileName);
@@ -239,7 +274,7 @@ export function ReviewScreen() {
                       (f) => p(f),
                     );
                     if (warning) toast(warning);
-                    else toast(`Saved ${outName} to your folder.`);
+                    else toast(`Saved ${outName} to your library.`);
                   });
                 }}
               >
@@ -247,18 +282,17 @@ export function ReviewScreen() {
               </button>
             ))}
           </div>
-          <p className="text-[11.5px] text-faint leading-snug">
-            {storageMode === 'opfs'
-              ? '↓ downloads the file out of browser storage; other formats convert locally — nothing is uploaded.'
-              : 'Your recording is already on disk. ↓ downloads a copy; other formats convert locally — nothing is uploaded.'}
+          <p className="hint mt-2.5">
+            ↓ downloads the current file.
+            <br />
+            Other formats convert on your machine — nothing is uploaded.
           </p>
-        </div>
+        </Module>
 
-        <div className="panel p-3.5 flex flex-col gap-2.5">
-          <span className="label-mono">audio enhance</span>
+        <Module title="Audio" no="FX">
           <button
             type="button"
-            className="hairline-btn"
+            className="btn w-full"
             onClick={() =>
               void withBusy('Enhancing audio', async (p) => {
                 if (!file || !dir) return;
@@ -276,43 +310,43 @@ export function ReviewScreen() {
               })
             }
           >
-            ✦ denoise + normalize to −14 LUFS
+            ✦ Enhance audio
           </button>
-          <p className="text-[11.5px] text-faint leading-snug">
-            RNNoise neural denoise + YouTube-loudness normalization, fully local. Writes a new
-            “(enhanced)” file; the original stays untouched.
+          <p className="hint mt-2.5">
+            One pass: denoise + level to −14 LUFS.
+            <br />A new file is written; the original stays.
           </p>
-        </div>
-      </div>
+        </Module>
 
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          className="danger-btn"
-          onClick={() =>
-            void (async () => {
-              if (!dir) return;
-              await dir.removeEntry(reviewFileName).catch(() => {});
-              await refreshLibrary();
-              backToPreflight();
-            })()
-          }
-        >
-          delete take
-        </button>
-        <button type="button" className="hairline-btn" onClick={backToPreflight}>
-          ● new recording
-        </button>
-      </div>
+        <Module title="Take" no="TC" val={file ? formatSize(file.size) : undefined}>
+          <button type="button" className="btn w-full" onClick={backToPreflight}>
+            Roll next take
+          </button>
+          <p className="hint mt-2.5" style={{ wordBreak: 'break-all' }}>
+            {reviewFileName}
+            <br />
+            {storageMode === 'opfs' ? 'browser storage · use ↓ to export' : (dirName ?? 'on disk')}
+          </p>
+        </Module>
+      </aside>
 
       {busy && (
-        <div className="absolute inset-0 z-20 grid place-items-center bg-bg/85 rounded-xl">
-          <div className="panel p-6 w-[320px] flex flex-col gap-3">
-            <span className="text-[13px]">{busy.label}…</span>
+        <div
+          className="absolute inset-0 grid place-items-center"
+          style={{ zIndex: 40, background: 'color-mix(in srgb, var(--color-bg) 82%, transparent)', borderRadius: 'var(--radius-4)' }}
+        >
+          <div className="module w-[340px]">
+            <div className="mod-label">
+              <b>Processing</b>
+              <span className="no">LOCAL</span>
+            </div>
+            <p className="text-[13px] mb-3" style={{ color: 'var(--color-ink-2)' }}>
+              {busy.label}…
+            </p>
             <ProgressBar fraction={busy.progress} />
-            <span className="font-mono text-[11px] text-mute">
-              {Math.round(busy.progress * 100)}% · local processing
-            </span>
+            <p className="hint mt-2.5">
+              <Lamp size={7} /> local processing · nothing leaves this machine
+            </p>
           </div>
         </div>
       )}

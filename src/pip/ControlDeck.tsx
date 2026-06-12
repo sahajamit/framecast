@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { elapsedMs, formatElapsed, useStore } from '../state/store';
 import { runtime } from '../recorder/runtime';
 import { setMicMuted, stopRecording, togglePause, updateBubble } from '../app/controller';
-import { Meter, SliderField, TallyDot } from '../ui/controls';
+import { Fader, Lamp, Timecode, VuMeter } from '../ui/controls';
 import { useBubbleDrag } from '../ui/useBubbleDrag';
 import { readLevel, meterPosition } from '../audio/levelMeter';
 import { registerShortcuts } from '../shortcuts/keyboard';
@@ -10,23 +10,28 @@ import {
   BUBBLE_MAX_SIZE,
   BUBBLE_MIN_SIZE,
   cornerPosition,
-  SNAP_CORNERS,
   ZOOM_MAX,
   ZOOM_MIN,
+  type SnapCorner,
 } from '../compositor/layout';
 
-const CORNER_GLYPHS: Record<string, string> = {
-  'top-left': '◰',
-  'top-right': '◳',
-  'bottom-left': '◱',
-  'bottom-right': '◲',
-};
+function snapTo(corner: SnapCorner): void {
+  const session = runtime.session;
+  const dims = session ? { w: session.width, h: session.height } : { w: 16, h: 9 };
+  updateBubble(cornerPosition(corner, useStore.getState().settings.bubble, dims.w, dims.h));
+}
+
+const SNAPS: { corner: SnapCorner; cls: string }[] = [
+  { corner: 'top-left', cls: 'nw' },
+  { corner: 'top-right', cls: 'ne' },
+  { corner: 'bottom-left', cls: 'sw' },
+  { corner: 'bottom-right', cls: 'se' },
+];
 
 /**
- * The control deck: lives in the Document PiP window during recording (or
- * inline in the tab when PiP is unavailable / in e2e mode). Everything the
- * creator needs mid-take: live preview with drag-to-move bubble, snap, zoom,
- * mic, pause, stop, timer.
+ * The floating deck: the creator's cockpit mid-take. Lives in the Document
+ * PiP window during recording (or inline in the tab when PiP is unavailable
+ * / in e2e mode). Always dark — it is a video surface.
  */
 export function ControlDeck({ windowRef }: { windowRef: Window }) {
   const phase = useStore((s) => s.session.phase);
@@ -35,6 +40,7 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
   const bubble = useStore((s) => s.settings.bubble);
   const layout = useStore((s) => s.settings.layout);
   const micEnabled = useStore((s) => s.settings.micEnabled);
+  const presetId = useStore((s) => s.settings.presetId);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [clock, setClock] = useState('00:00');
@@ -70,140 +76,150 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
         stop: () => void stopRecording(),
         toggleMic: () => setMicMuted(!useStore.getState().session.micMuted),
         toggleCamera: () => updateBubble({ visible: !useStore.getState().settings.bubble.visible }),
-        snap: (corner) => {
-          const s = useStore.getState();
-          const dims = runtime.session
-            ? { w: runtime.session.width, h: runtime.session.height }
-            : { w: 16, h: 9 };
-          updateBubble(cornerPosition(corner, s.settings.bubble, dims.w, dims.h));
-        },
+        snap: snapTo,
       }),
     [windowRef],
   );
 
-  const content = () =>
-    session ? { w: session.width, h: session.height } : { w: 16, h: 9 };
+  const content = () => (session ? { w: session.width, h: session.height } : { w: 16, h: 9 });
   const { handlers, cursor } = useBubbleDrag(content, hasBubble && bubble.visible);
 
   const recording = phase === 'recording';
   const paused = phase === 'paused';
+  const counting = phase === 'countdown';
 
   return (
-    <div className="force-dark h-full flex flex-col gap-3 p-3 bg-bg text-ink select-none">
-      {/* preview + drag overlay */}
-      <div
-        className="relative rounded-lg overflow-hidden border border-line bg-black aspect-video"
-        style={{ cursor, touchAction: 'none' }}
-        {...handlers}
-      >
-        <video
-          ref={videoRef}
-          muted
-          playsInline
-          autoPlay
-          className="absolute inset-0 h-full w-full object-contain pointer-events-none"
-        />
-        {phase === 'countdown' && (
-          <div className="absolute inset-0 grid place-items-center bg-black/60">
-            <span key={countdown} className="count-pop font-display font-bold text-6xl text-ink">
-              {countdown}
-            </span>
-          </div>
+    <div className="deck force-dark">
+      <div className="deck-top">
+        {counting ? (
+          <span className="onair-word standby">
+            <Lamp kind="warn" pulse />
+            Stand by
+          </span>
+        ) : (
+          <span className="onair-word">
+            <Lamp kind="rec" pulse={recording} />
+            On air
+          </span>
         )}
-        {paused && (
-          <div className="absolute inset-0 grid place-items-center bg-black/50">
-            <span className="label-mono !text-accent !text-[12px]">paused</span>
-          </div>
-        )}
-        <div className="absolute top-1.5 left-1.5 flex items-center gap-1.5 bg-black/55 rounded-md px-2 py-1">
-          <TallyDot live={recording} size={10} />
-          <span className="font-mono text-[11px] text-ink tabular-nums">{clock}</span>
-        </div>
+        <span className="flex-1" />
+        <Timecode live={recording} paused={paused}>
+          {clock}
+        </Timecode>
       </div>
 
-      {/* bubble controls */}
-      {hasBubble && (
-        <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center">
-          <div className="grid grid-cols-2 gap-1">
-            {SNAP_CORNERS.map((corner) => (
+      <div className="relative">
+        <div className="stage" style={{ cursor, touchAction: 'none' }} {...handlers}>
+          <video ref={videoRef} muted playsInline autoPlay className="object-contain pointer-events-none" />
+          {counting && (
+            <div
+              className="absolute inset-0 grid place-items-center"
+              style={{ background: 'rgba(0,0,0,0.6)', zIndex: 5 }}
+            >
+              <span key={countdown} className="cd-num slam" style={{ fontSize: 84 }}>
+                {countdown}
+              </span>
+            </div>
+          )}
+          {paused && (
+            <div
+              className="absolute inset-0 grid place-items-center"
+              style={{ background: 'rgba(0,0,0,0.5)', zIndex: 5 }}
+            >
+              <span
+                className="label"
+                style={{ color: 'var(--color-warn)', fontSize: 12, letterSpacing: '0.3em' }}
+              >
+                paused
+              </span>
+            </div>
+          )}
+          {hasBubble &&
+            SNAPS.map(({ corner, cls }) => (
               <button
                 key={corner}
                 type="button"
-                title={`Snap ${corner}`}
-                onClick={() => {
-                  const dims = content();
-                  updateBubble(
-                    cornerPosition(corner, useStore.getState().settings.bubble, dims.w, dims.h),
-                  );
-                }}
-                className="h-7 w-7 grid place-items-center rounded-md border border-line text-mute
-                  hover:text-ink hover:border-line-strong text-[13px] cursor-pointer"
-              >
-                {CORNER_GLYPHS[corner]}
-              </button>
+                className={`snap ${cls}`}
+                title={`Snap bubble ${corner}`}
+                aria-label={`Snap bubble ${corner}`}
+                onClick={() => snapTo(corner)}
+              />
             ))}
-          </div>
-          <div className="flex flex-col gap-1">
-            <SliderField
-              label="cam zoom"
-              value={bubble.zoom}
-              min={ZOOM_MIN}
-              max={ZOOM_MAX}
-              step={0.05}
-              onChange={(zoom) => updateBubble({ zoom })}
-              format={(v) => `${v.toFixed(2)}×`}
-            />
-            <SliderField
-              label="cam size"
-              value={bubble.size}
-              min={BUBBLE_MIN_SIZE}
-              max={BUBBLE_MAX_SIZE}
-              step={0.01}
-              onChange={(size) => updateBubble({ size })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </div>
+        </div>
+      </div>
+
+      {hasBubble && (
+        <div className="grid grid-cols-2 gap-3.5">
+          <Fader
+            label="Zoom"
+            value={bubble.zoom}
+            min={ZOOM_MIN}
+            max={ZOOM_MAX}
+            step={0.05}
+            onChange={(zoom) => updateBubble({ zoom })}
+            format={(v) => `${v.toFixed(2)}×`}
+          />
+          <Fader
+            label="Size"
+            value={bubble.size}
+            min={BUBBLE_MIN_SIZE}
+            max={BUBBLE_MAX_SIZE}
+            step={0.01}
+            onChange={(size) => updateBubble({ size })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         </div>
       )}
 
-      {/* mic strip */}
       {micEnabled && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
+            className={`btn-s ${micMuted ? 'danger' : ''}`}
             onClick={() => setMicMuted(!micMuted)}
-            className={`hairline-btn !px-2.5 !py-1.5 ${micMuted ? '!border-accent/60 !text-accent' : ''}`}
             title="Toggle mic (M)"
           >
-            {micMuted ? 'mic off' : 'mic on'}
+            {micMuted ? 'Muted' : 'Mute'}
           </button>
           <div className="flex-1">
-            <Meter level={micMuted ? 0 : level} />
+            <VuMeter level={micMuted ? 0 : level} muted={micMuted} />
           </div>
         </div>
       )}
 
-      {/* transport */}
-      <div className="mt-auto grid grid-cols-2 gap-2">
+      <div className="flex gap-2.5 mt-auto">
         <button
           type="button"
+          className="btn lg flex-1"
           onClick={togglePause}
           disabled={!recording && !paused}
-          className="hairline-btn py-3"
           title="Pause/resume (Space)"
         >
-          {paused ? '▶ resume' : '❚❚ pause'}
+          {paused ? '▶ Resume' : '❚❚ Pause'}
         </button>
         <button
           type="button"
+          className="btn lg danger fill flex-1"
           onClick={() => void stopRecording()}
           disabled={!recording && !paused}
-          className="danger-btn py-3"
           title="Stop (S)"
         >
-          ■ stop & save
+          ■ Stop & save
         </button>
+      </div>
+
+      <div className="deck-foot">
+        <span>Framecast · {PRESET_LABELS[presetId] ?? presetId}</span>
+        <span>Direct to disk</span>
       </div>
     </div>
   );
 }
+
+const PRESET_LABELS: Record<string, string> = {
+  '1080p30': '1080p/30',
+  '1080p60': '1080p/60',
+  '1440p30': '1440p/30',
+  '1440p60': '1440p/60',
+  '2160p30': '4K/30',
+};

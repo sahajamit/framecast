@@ -12,13 +12,8 @@ import {
   updateBubble,
 } from './controller';
 import { drawScene } from '../compositor/scene';
-import {
-  BUBBLE_MAX_SIZE,
-  BUBBLE_MIN_SIZE,
-  ZOOM_MAX,
-  ZOOM_MIN,
-} from '../compositor/layout';
-import { Field, Meter, Segmented, SelectField, SliderField, Toggle } from '../ui/controls';
+import { BUBBLE_MAX_SIZE, BUBBLE_MIN_SIZE, ZOOM_MAX, ZOOM_MIN } from '../compositor/layout';
+import { Fader, Module, Segmented, SelectField, Switch, Timecode, VuMeter } from '../ui/controls';
 import { useBubbleDrag } from '../ui/useBubbleDrag';
 import { meterPosition, readLevel } from '../audio/levelMeter';
 import { PRESETS } from '../recorder/encoderConfig';
@@ -96,9 +91,7 @@ export function PreflightScreen() {
   useEffect(() => {
     const tick = setInterval(() => {
       const graph = runtime.audioGraph;
-      setMicLevel(
-        graph && settings.micEnabled ? meterPosition(readLevel(graph.analyser).db) : 0,
-      );
+      setMicLevel(graph && settings.micEnabled ? meterPosition(readLevel(graph.analyser).db) : 0);
     }, 125);
     return () => clearInterval(tick);
   }, [settings.micEnabled]);
@@ -108,268 +101,272 @@ export function PreflightScreen() {
     settings.layout === 'screen+camera',
   );
 
-  const canStart =
-    settings.layout === 'camera' ? !!runtime.cameraStream : screenReady;
+  const needsScreen = settings.layout !== 'camera';
+  const canStart = settings.layout === 'camera' ? !!runtime.cameraStream : screenReady;
+  const micName = deviceLabel(devices.mics, settings.micId) ?? 'Default microphone';
 
   return (
-    <div className="grid lg:grid-cols-[1fr_330px] gap-6 items-start rise-in">
-      {/* stage */}
-      <div className="flex flex-col gap-3">
-        <div className="viewfinder rounded-sm">
-          <div className="vf-b" />
-          <canvas
-            ref={canvasRef}
-            width={STAGE_W}
-            height={STAGE_H}
-            {...handlers}
-            style={{ cursor, touchAction: 'none' }}
-            className="w-full rounded-sm border border-line bg-black"
-          />
-        </div>
-        <div className="flex items-center justify-between px-1">
-          <span className="label-mono">
-            {settings.layout !== 'camera' && !screenReady
-              ? 'select a screen to see the live preview'
-              : settings.layout === 'screen+camera'
-                ? 'live preview · drag the bubble · scroll over it to zoom'
-                : settings.layout === 'screen'
-                  ? 'live preview · screen only'
-                  : 'camera only — full frame'}
+    <div className="grid lg:grid-cols-[1fr_336px] gap-5 items-start rise-in">
+      {/* program monitor */}
+      <div className="monitor">
+        <div className="monitor-head">
+          <span className="take-title">
+            Program <em>monitor</em>
           </span>
-          <span className="label-mono">
-            {PRESETS[settings.presetId].label} · h.264
-            {devices.audioCodec ? ` + ${devices.audioCodec}` : ''}
+          <span className="src-read">
+            {needsScreen ? (screenReady ? (screenInfo ?? 'sharing') : 'no source selected') : 'camera only'}
           </span>
+          <div className="monitor-actions">
+            {needsScreen &&
+              (screenReady ? (
+                <>
+                  <button type="button" className="btn-s" onClick={() => void selectScreen()}>
+                    Change
+                  </button>
+                  <button type="button" className="btn-s danger" onClick={stopScreenShare}>
+                    Stop share
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-s accent"
+                  onClick={() => void selectScreen()}
+                >
+                  ⊞ Select screen
+                </button>
+              ))}
+          </div>
         </div>
-        <video ref={camVideoRef} muted playsInline className="hidden" />
-        <video ref={screenVideoRef} muted playsInline className="hidden" />
+        <div className="stage force-dark" style={{ cursor, touchAction: 'none' }} {...handlers}>
+          <canvas ref={canvasRef} width={STAGE_W} height={STAGE_H} />
+        </div>
+        <div className="monitor-strip">
+          <span className={canStart ? 'ok' : ''}>● Signal</span>
+          <span className="sep" />
+          {settings.captureSystemAudio && needsScreen && <span>Tab audio in</span>}
+          {settings.captureSystemAudio && needsScreen && <span className="sep" />}
+          <span className="truncate">
+            {settings.micEnabled ? `Mic open — ${micName}` : 'Mic off'}
+          </span>
+          <span className="flex-1" />
+          <Timecode>00:00:00</Timecode>
+        </div>
       </div>
 
-      {/* control rail */}
-      <aside className="flex flex-col gap-5">
-        <Field label="layout">
+      {/* channel-strip rail */}
+      <aside className="flex flex-col gap-3">
+        <Module title="Program" no="CH·01">
           <Segmented
+            ariaLabel="Layout"
             value={settings.layout}
             onChange={(layout) => patchSettings({ layout })}
             options={[
-              { value: 'screen+camera', label: 'screen + cam' },
-              { value: 'screen', label: 'screen' },
-              { value: 'camera', label: 'camera' },
+              { value: 'screen+camera', label: 'Scrn+Cam' },
+              { value: 'screen', label: 'Screen' },
+              { value: 'camera', label: 'Camera' },
             ]}
           />
-        </Field>
-
-        {settings.layout !== 'camera' && (
-          <div className="panel p-3.5 flex flex-col gap-3">
-            <span className="label-mono">screen</span>
-            {screenReady ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-ok shrink-0" />
-                  <span className="text-[13px] truncate">{screenInfo ?? 'sharing'}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" className="hairline-btn" onClick={() => void selectScreen()}>
-                    ⇄ change
-                  </button>
-                  <button type="button" className="hairline-btn" onClick={stopScreenShare}>
-                    ✕ stop sharing
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => void selectScreen()}
-                  className="hairline-btn !border-accent/60 !text-accent hover:!border-accent py-3"
-                >
-                  ⊞ select screen
-                </button>
-                <p className="text-[11.5px] text-faint leading-snug">
-                  Pick a tab, window or your entire screen. A tab share records only the page, no
-                  browser chrome.
-                </p>
-              </>
-            )}
-          </div>
-        )}
+        </Module>
 
         {settings.layout !== 'screen' && (
-          <div className="panel p-3.5 flex flex-col gap-3.5">
-            <Field label="camera">
-              <SelectField
-                value={settings.camId ?? ''}
-                onChange={(camId) => patchSettings({ camId: camId || null })}
-                options={[
-                  { value: '', label: 'Default camera' },
-                  ...devices.cams.map((d) => ({
-                    value: d.deviceId,
-                    label: d.label || 'Camera',
-                  })),
-                ]}
-              />
-            </Field>
-            <SliderField
-              label="zoom (head framing)"
-              value={settings.bubble.zoom}
-              min={ZOOM_MIN}
-              max={ZOOM_MAX}
-              step={0.05}
-              onChange={(zoom) => updateBubble({ zoom })}
-              format={(v) => `${v.toFixed(2)}×`}
+          <Module title="Camera" no="CH·02">
+            <SelectField
+              ariaLabel="Camera"
+              value={settings.camId ?? ''}
+              onChange={(camId) => patchSettings({ camId: camId || null })}
+              options={[
+                { value: '', label: 'Default camera' },
+                ...devices.cams.map((d) => ({ value: d.deviceId, label: d.label || 'Camera' })),
+              ]}
             />
+            <div className="mt-3">
+              <Fader
+                label="Zoom · head framing"
+                value={settings.bubble.zoom}
+                min={ZOOM_MIN}
+                max={ZOOM_MAX}
+                step={0.05}
+                onChange={(zoom) => updateBubble({ zoom })}
+                format={(v) => `${v.toFixed(2)}×`}
+              />
+            </div>
             {settings.layout === 'screen+camera' && (
               <>
-                <SliderField
-                  label="bubble size"
-                  value={settings.bubble.size}
-                  min={BUBBLE_MIN_SIZE}
-                  max={BUBBLE_MAX_SIZE}
-                  step={0.01}
-                  onChange={(size) => updateBubble({ size })}
-                  format={(v) => `${Math.round(v * 100)}%`}
-                />
-                <Segmented
-                  value={settings.bubble.shape}
-                  onChange={(shape) => patchBubble({ shape })}
-                  options={[
-                    { value: 'circle', label: '● circle' },
-                    { value: 'roundedRect', label: '▢ rounded' },
-                  ]}
-                />
+                <div className="mt-2">
+                  <Fader
+                    label="Bubble size"
+                    value={settings.bubble.size}
+                    min={BUBBLE_MIN_SIZE}
+                    max={BUBBLE_MAX_SIZE}
+                    step={0.01}
+                    onChange={(size) => updateBubble({ size })}
+                    format={(v) => `${Math.round(v * 100)}%`}
+                  />
+                </div>
+                <div className="mt-3">
+                  <Segmented
+                    ariaLabel="Bubble shape"
+                    value={settings.bubble.shape}
+                    onChange={(shape) => patchBubble({ shape })}
+                    options={[
+                      { value: 'circle', label: 'Circle' },
+                      { value: 'roundedRect', label: 'Rounded' },
+                    ]}
+                  />
+                </div>
               </>
             )}
-            <div className="grid grid-cols-3 gap-2">
-              <Toggle
+            <div className="sw-row mt-4 px-2">
+              <Switch
                 checked={settings.bubble.mirror}
                 onChange={(mirror) => patchBubble({ mirror })}
                 label="Mirror"
               />
-              <Toggle
+              <Switch
                 checked={settings.bubble.border}
                 onChange={(border) => patchBubble({ border })}
                 label="Border"
               />
-              <Toggle
+              <Switch
                 checked={settings.bubble.shadow}
                 onChange={(shadow) => patchBubble({ shadow })}
                 label="Shadow"
               />
             </div>
-          </div>
+          </Module>
         )}
 
-        <div className="panel p-3.5 flex flex-col gap-3.5">
-          <div className="flex items-center justify-between">
-            <span className="label-mono">microphone</span>
-            <Toggle
+        <Module
+          title="Mic"
+          no="CH·03"
+          val={
+            <Switch
+              horizontal
               checked={settings.micEnabled}
               onChange={(micEnabled) => patchSettings({ micEnabled })}
-              label=""
+              label="Microphone on"
             />
-          </div>
+          }
+        >
           {settings.micEnabled && (
             <>
               <SelectField
+                ariaLabel="Microphone"
                 value={settings.micId ?? ''}
                 onChange={(micId) => patchSettings({ micId: micId || null })}
                 options={[
                   { value: '', label: 'Default microphone' },
-                  ...devices.mics.map((d) => ({
-                    value: d.deviceId,
-                    label: d.label || 'Microphone',
-                  })),
+                  ...devices.mics.map((d) => ({ value: d.deviceId, label: d.label || 'Microphone' })),
                 ]}
               />
-              <Meter level={micLevel} />
-              <div className="grid grid-cols-3 gap-2">
-                <Toggle
+              <div className="mt-3">
+                <VuMeter level={micLevel} />
+                <div className="vu-cap">
+                  <span>−60</span>
+                  <span>−24</span>
+                  <span>−12</span>
+                  <span>0</span>
+                </div>
+              </div>
+              <div className="sw-row mt-4 px-2">
+                <Switch
                   checked={settings.micProcessing.noiseSuppression}
                   onChange={(v) =>
-                    patchSettings({
-                      micProcessing: { ...settings.micProcessing, noiseSuppression: v },
-                    })
+                    patchSettings({ micProcessing: { ...settings.micProcessing, noiseSuppression: v } })
                   }
                   label="Denoise"
                 />
-                <Toggle
+                <Switch
                   checked={settings.micProcessing.echoCancellation}
                   onChange={(v) =>
-                    patchSettings({
-                      micProcessing: { ...settings.micProcessing, echoCancellation: v },
-                    })
+                    patchSettings({ micProcessing: { ...settings.micProcessing, echoCancellation: v } })
                   }
                   label="Echo"
                 />
-                <Toggle
+                <Switch
                   checked={settings.micProcessing.autoGainControl}
                   onChange={(v) =>
-                    patchSettings({
-                      micProcessing: { ...settings.micProcessing, autoGainControl: v },
-                    })
+                    patchSettings({ micProcessing: { ...settings.micProcessing, autoGainControl: v } })
                   }
                   label="Gain"
                 />
               </div>
             </>
           )}
-        </div>
+        </Module>
 
-        <div className="panel p-3.5 flex flex-col gap-3.5">
-          <Field label="quality">
-            <SelectField
-              value={settings.presetId}
-              onChange={(presetId) => patchSettings({ presetId: presetId as PresetId })}
-              options={Object.values(PRESETS).map((p) => ({ value: p.id, label: p.label }))}
-            />
-          </Field>
+        <Module title="Tape" no="OUT">
+          <SelectField
+            ariaLabel="Quality preset"
+            mono
+            value={settings.presetId}
+            onChange={(presetId) => patchSettings({ presetId: presetId as PresetId })}
+            options={Object.values(PRESETS).map((p) => ({ value: p.id, label: p.label }))}
+          />
           {settings.layout !== 'camera' && (
             <>
-              <Toggle
-                checked={settings.captureSystemAudio}
-                onChange={(captureSystemAudio) => {
-                  patchSettings({ captureSystemAudio });
-                  if (useStore.getState().session.screenReady) {
-                    toast('Audio capture applies the next time you select a screen.');
-                  }
-                }}
-                label="Capture tab / system audio"
-              />
-              {settings.captureSystemAudio && (
-                <Toggle
-                  checked={settings.suppressLocalAudioPlayback}
-                  onChange={(suppressLocalAudioPlayback) =>
-                    patchSettings({ suppressLocalAudioPlayback })
-                  }
-                  label="Mute it locally while recording"
+              <div className="ctl-row mt-4">
+                <span className="ctl-name">Capture tab / system audio</span>
+                <Switch
+                  horizontal
+                  checked={settings.captureSystemAudio}
+                  onChange={(captureSystemAudio) => {
+                    patchSettings({ captureSystemAudio });
+                    if (useStore.getState().session.screenReady) {
+                      toast('Audio capture applies the next time you select a screen.');
+                    }
+                  }}
+                  label="Capture tab or system audio"
                 />
+              </div>
+              {settings.captureSystemAudio && (
+                <div className="ctl-row mt-2">
+                  <span className="ctl-name">Mute locally on roll</span>
+                  <Switch
+                    horizontal
+                    checked={settings.suppressLocalAudioPlayback}
+                    onChange={(suppressLocalAudioPlayback) =>
+                      patchSettings({ suppressLocalAudioPlayback })
+                    }
+                    label="Mute locally while recording"
+                  />
+                </div>
               )}
             </>
           )}
-        </div>
+        </Module>
 
-        <button
-          type="button"
-          disabled={!canStart}
-          onClick={() => void startFlow()}
-          className="group relative w-full rounded-xl bg-rec hover:bg-rec-hot disabled:opacity-40
-            disabled:cursor-not-allowed text-white font-display font-semibold text-[15px] py-4
-            transition-colors cursor-pointer shadow-[0_8px_30px_rgba(255,90,78,0.28)]"
-        >
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-white mr-2 align-middle group-hover:tally-live" />
-          Start recording
-        </button>
-        <p className="label-mono text-center -mt-2">
-          {canStart
-            ? 'floating controls pop out · 3‑2‑1 countdown · saved straight to disk'
-            : settings.layout === 'camera'
-              ? 'waiting for the camera…'
-              : 'select a screen above to enable recording'}
-        </p>
+        <div className="rec-mod">
+          <button
+            type="button"
+            className="punch"
+            aria-label="Roll tape"
+            disabled={!canStart}
+            onClick={() => void startFlow()}
+          />
+          <div className="rec-meta">
+            <div className="word">Roll tape</div>
+            <div className="sub">
+              {canStart
+                ? 'Arms · 3 · 2 · 1 · on air'
+                : settings.layout === 'camera'
+                  ? 'Waiting for the camera'
+                  : 'Select a screen to arm'}
+            </div>
+          </div>
+        </div>
       </aside>
+
+      <video ref={camVideoRef} muted playsInline className="hidden" />
+      <video ref={screenVideoRef} muted playsInline className="hidden" />
     </div>
   );
+}
+
+function deviceLabel(devices: MediaDeviceInfo[], id: string | null): string | null {
+  if (!id) return null;
+  return devices.find((d) => d.deviceId === id)?.label ?? null;
 }
 
 /** Stand-in for the screen feed before a capture surface is picked. */
@@ -379,22 +376,24 @@ function makeScreenPlaceholder(): HTMLCanvasElement {
   canvas.height = STAGE_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas; // e.g. jsdom in component tests
-  ctx.fillStyle = '#0f1116';
+  // Diagonal video-well stripes per the Console stage spec.
+  ctx.fillStyle = '#0a0908';
   ctx.fillRect(0, 0, STAGE_W, STAGE_H);
-  ctx.strokeStyle = 'rgba(235,240,255,0.028)';
-  ctx.lineWidth = 10;
-  for (let x = -STAGE_H; x < STAGE_W + STAGE_H; x += 36) {
+  ctx.strokeStyle = '#11100d';
+  ctx.lineWidth = 14;
+  for (let x = -STAGE_H; x < STAGE_W + STAGE_H; x += 40) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x + STAGE_H, STAGE_H);
     ctx.stroke();
   }
-  ctx.fillStyle = 'rgba(235,240,255,0.28)';
-  ctx.font = '600 30px "Bricolage Grotesque Variable", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('Your screen appears here', STAGE_W / 2, STAGE_H / 2 - 12);
-  ctx.fillStyle = 'rgba(235,240,255,0.16)';
-  ctx.font = '13px "Spline Sans Mono Variable", monospace';
-  ctx.fillText('HIT “SELECT SCREEN” ON THE RIGHT · TAB / WINDOW / ENTIRE SCREEN', STAGE_W / 2, STAGE_H / 2 + 22);
+  ctx.fillStyle = '#4a443a';
+  ctx.font = '600 34px "Big Shoulders Display Variable", sans-serif';
+  const title = 'P R O G R A M   M O N I T O R';
+  ctx.fillText(title, STAGE_W / 2, STAGE_H / 2 - 10);
+  ctx.fillStyle = '#363129';
+  ctx.font = '13px "IBM Plex Mono", monospace';
+  ctx.fillText('· HIT “SELECT SCREEN” — TAB / WINDOW / ENTIRE SCREEN ·', STAGE_W / 2, STAGE_H / 2 + 26);
   return canvas;
 }

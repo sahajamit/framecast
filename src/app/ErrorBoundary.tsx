@@ -20,31 +20,34 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     const { error } = this.state;
     if (!error) return this.props.children;
     return (
-      <div className="min-h-full grid place-items-center p-6 bg-bg text-ink">
-        <div className="panel max-w-[560px] p-6 flex flex-col gap-3">
-          <h1 className="font-display font-semibold text-lg">framecast hit an unexpected error</h1>
-          <pre className="font-mono text-[11px] text-rec whitespace-pre-wrap break-all max-h-[200px] overflow-auto">
-            {error.message}
-            {'\n'}
-            {error.stack?.split('\n').slice(1, 6).join('\n')}
-          </pre>
-          <p className="text-[13px] text-mute">
-            Your recordings are safe: anything already captured is on disk and recoverable from
-            the library after a reload.
+      <div className="min-h-full grid place-items-center p-6">
+        <div className="err">
+          <div className="glyph">Signal lost</div>
+          <p>
+            Something broke mid-session. Anything already recorded was streaming to your disk and
+            is recoverable from the library after a reload.
           </p>
-          <div className="flex gap-2">
-            <button type="button" className="danger-btn" onClick={() => location.reload()}>
-              reload app
+          <div className="diag">
+            <b>WHAT WE KNOW</b>
+            <br />
+            ERR · {error.message}
+            <br />
+            {error.stack?.split('\n').slice(1, 4).join(' · ')}
+          </div>
+          <div className="flex gap-2.5 mt-1">
+            <button type="button" className="btn primary lg" onClick={() => location.reload()}>
+              Reload studio
             </button>
             <a
-              className="hairline-btn"
+              className="btn lg"
+              style={{ textDecoration: 'none' }}
               href={`https://github.com/sahajamit/framecast/issues/new?title=${encodeURIComponent(
                 `Crash: ${error.message}`,
               )}`}
               target="_blank"
               rel="noreferrer"
             >
-              report issue ↗
+              Report issue ↗
             </a>
           </div>
         </div>

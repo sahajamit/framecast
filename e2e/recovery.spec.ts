@@ -15,8 +15,8 @@ test('a crashed tab leaves a recoverable recording', async ({ page, context }) =
 
   const revived = await context.newPage();
   await revived.goto('/?e2e=1');
-  await expect(revived.getByText(/interrupted recording/i)).toBeVisible({ timeout: 15_000 });
-  await revived.getByRole('button', { name: /^recover$/i }).click();
+  await expect(revived.getByText(/interrupted take/i)).toBeVisible({ timeout: 15_000 });
+  await revived.getByRole('button', { name: /^recover take$/i }).click();
   await expect(revived.getByText(/^Recovered /)).toBeVisible({ timeout: 60_000 });
 
   const recovered = (await listLibrary(revived)).find((n) => n.includes('recovered'));

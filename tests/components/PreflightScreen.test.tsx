@@ -33,8 +33,8 @@ describe('PreflightScreen gating', () => {
   it('disables Start and shows the select-screen step until a screen is picked', () => {
     render(<PreflightScreen />);
     expect(screen.getByRole('button', { name: /select screen/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /start recording/i })).toBeDisabled();
-    expect(screen.getByText(/select a screen above/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /roll tape/i })).toBeDisabled();
+    expect(screen.getByText(/select a screen to arm/i)).toBeInTheDocument();
   });
 
   it('enables Start and shows sharing controls once a screen is live', () => {
@@ -42,8 +42,8 @@ describe('PreflightScreen gating', () => {
     render(<PreflightScreen />);
     expect(screen.getByText('browser tab (viewport only)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /change/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /stop sharing/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /start recording/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /stop share/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /roll tape/i })).toBeEnabled();
   });
 
   it('camera-only layout needs no screen but does need a camera', () => {
@@ -51,7 +51,7 @@ describe('PreflightScreen gating', () => {
     render(<PreflightScreen />);
     expect(screen.queryByRole('button', { name: /select screen/i })).not.toBeInTheDocument();
     // No camera stream in jsdom -> still disabled, with the waiting hint.
-    expect(screen.getByRole('button', { name: /start recording/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /roll tape/i })).toBeDisabled();
     expect(screen.getByText(/waiting for the camera/i)).toBeInTheDocument();
   });
 });

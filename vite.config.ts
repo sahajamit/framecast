@@ -10,7 +10,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg'],
+      includeAssets: ['icon.svg', 'icon-onair.svg'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,wasm,woff2}'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
@@ -20,8 +20,8 @@ export default defineConfig({
         short_name: 'framecast',
         description:
           'Fully-local screen + camera recorder for creators. Nothing ever leaves your machine.',
-        theme_color: '#0B0B0C',
-        background_color: '#0B0B0C',
+        theme_color: '#131110',
+        background_color: '#131110',
         display: 'standalone',
         icons: [
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },

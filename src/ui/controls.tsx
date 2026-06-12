@@ -1,12 +1,28 @@
 import type { ReactNode } from 'react';
-import { useId } from 'react';
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+/** Channel-strip module card. */
+export function Module({
+  title,
+  no,
+  val,
+  children,
+  className = '',
+}: {
+  title: string;
+  no?: string;
+  val?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="label-mono">{label}</span>
+    <section className={`module ${className}`}>
+      <div className="mod-label">
+        <b>{title}</b>
+        {no && <span className="no">{no}</span>}
+        {val !== undefined && <span className="val">{val}</span>}
+      </div>
       {children}
-    </div>
+    </section>
   );
 }
 
@@ -15,72 +31,73 @@ export function SelectField({
   onChange,
   options,
   disabled,
+  mono = false,
+  ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   disabled?: boolean;
+  mono?: boolean;
+  ariaLabel?: string;
 }) {
   return (
-    <select
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-panel-2 border border-line rounded-lg px-2.5 py-2 text-[13px] text-ink
-        outline-none focus:border-line-strong disabled:opacity-40 cursor-pointer"
-    >
-      {options.map((o) => (
-        <option key={o.value} value={o.value} className="bg-panel">
-          {o.label}
-        </option>
-      ))}
-    </select>
+    <div className="select-wrap">
+      <select
+        className={`select ${mono ? 'mono-read' : ''}`}
+        value={value}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
-export function Toggle({
+/**
+ * Physical throw switch. Vertical (channel-strip style) by default,
+ * horizontal for inline settings rows.
+ */
+export function Switch({
   checked,
   onChange,
   label,
+  horizontal = false,
   disabled,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label: string;
+  horizontal?: boolean;
   disabled?: boolean;
 }) {
-  const id = useId();
+  const button = (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`tog ${horizontal ? 'h' : ''} ${checked ? 'on' : ''}`}
+    />
+  );
+  if (horizontal) return button;
   return (
-    <label
-      htmlFor={id}
-      className={`flex items-center justify-between gap-3 cursor-pointer select-none ${
-        disabled ? 'opacity-40 pointer-events-none' : ''
-      }`}
-    >
-      <span className="text-[13px] text-ink/90">{label}</span>
-      <span
-        className={`relative inline-flex h-[18px] w-[32px] shrink-0 items-center rounded-full border transition-colors ${
-          checked ? 'bg-accent/85 border-accent' : 'bg-panel-2 border-line-strong'
-        }`}
-      >
-        <input
-          id={id}
-          type="checkbox"
-          className="sr-only"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-        <span
-          className={`absolute h-[12px] w-[12px] rounded-full bg-ink transition-transform ${
-            checked ? 'translate-x-[16px]' : 'translate-x-[3px]'
-          }`}
-        />
-      </span>
-    </label>
+    <span className="sw-item">
+      {button}
+      <span className="sw-cap">{label}</span>
+    </span>
   );
 }
 
-export function SliderField({
+export function Fader({
   label,
   value,
   min,
@@ -88,6 +105,7 @@ export function SliderField({
   step,
   onChange,
   format,
+  disabled,
 }: {
   label: string;
   value: number;
@@ -96,24 +114,25 @@ export function SliderField({
   step: number;
   onChange: (value: number) => void;
   format?: (value: number) => string;
+  disabled?: boolean;
 }) {
   const fill = ((value - min) / (max - min)) * 100;
   return (
-    <div className="flex flex-col gap-0.5">
-      <div className="flex items-baseline justify-between">
-        <span className="label-mono">{label}</span>
-        <span className="font-mono text-[11px] text-ink/80">
-          {format ? format(value) : value.toFixed(2)}
-        </span>
+    <div>
+      <div className="ctl-row">
+        <span className="ctl-name">{label}</span>
+        <span className="ctl-val">{format ? format(value) : value.toFixed(2)}</span>
       </div>
       <input
         type="range"
         className="fader"
+        aria-label={label}
         style={{ ['--fill' as string]: `${fill}%` }}
         min={min}
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
       />
     </div>
@@ -125,26 +144,23 @@ export function Segmented<T extends string>({
   onChange,
   options,
   disabled,
+  ariaLabel,
 }: {
   value: T;
   onChange: (value: T) => void;
   options: { value: T; label: string }[];
   disabled?: boolean;
+  ariaLabel?: string;
 }) {
   return (
-    <div
-      className={`grid auto-cols-fr grid-flow-col gap-px bg-line rounded-lg p-px border border-line ${
-        disabled ? 'opacity-40 pointer-events-none' : ''
-      }`}
-    >
+    <div className="seg" role="group" aria-label={ariaLabel}>
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
+          disabled={disabled}
           onClick={() => onChange(o.value)}
-          className={`font-mono text-[10.5px] tracking-[0.08em] uppercase rounded-[7px] px-2 py-2 transition-colors cursor-pointer ${
-            o.value === value ? 'bg-panel-2 text-ink' : 'bg-panel text-mute hover:text-ink'
-          }`}
+          className={o.value === value ? 'on' : ''}
         >
           {o.label}
         </button>
@@ -153,55 +169,67 @@ export function Segmented<T extends string>({
   );
 }
 
-const METER_SEGMENTS = 16;
+const VU_SEGMENTS = 16;
 
-/** Segmented LED level meter, green → amber → red. */
-export function Meter({ level }: { level: number }) {
-  const lit = Math.round(level * METER_SEGMENTS);
+/** Segmented LED level meter: green ramp, amber shoulder, red clip. */
+export function VuMeter({ level, muted = false }: { level: number; muted?: boolean }) {
+  const lit = Math.round(level * VU_SEGMENTS);
   return (
-    <div className="flex items-center gap-[3px] h-[10px]">
-      {Array.from({ length: METER_SEGMENTS }, (_, i) => {
-        const on = i < lit;
-        const frac = i / METER_SEGMENTS;
-        const color =
-          frac < 0.62 ? 'var(--color-ok)' : frac < 0.85 ? 'var(--fc-accent)' : 'var(--color-rec)';
-        return (
-          <span
-            key={i}
-            className="flex-1 rounded-[1.5px] transition-opacity duration-75"
-            style={{
-              height: '100%',
-              background: on ? color : 'var(--fc-line)',
-              boxShadow: on ? `0 0 6px ${color}44` : 'none',
-            }}
-          />
-        );
+    <div className={`vu ${muted ? 'muted' : ''}`} aria-hidden="true">
+      {Array.from({ length: VU_SEGMENTS }, (_, i) => {
+        const frac = i / VU_SEGMENTS;
+        const cls = i >= lit ? '' : frac < 0.62 ? 'g' : frac < 0.85 ? 'a' : 'r';
+        return <i key={i} className={cls} />;
       })}
     </div>
   );
 }
 
 export function ProgressBar({ fraction }: { fraction: number }) {
+  const pct = Math.round(Math.min(1, Math.max(0, fraction)) * 100);
   return (
-    <div className="h-[4px] w-full rounded-full bg-line-strong overflow-hidden">
-      <div
-        className="h-full rounded-full bg-accent transition-[width] duration-200"
-        style={{ width: `${Math.round(Math.min(1, Math.max(0, fraction)) * 100)}%` }}
-      />
+    <div className="progress">
+      <div className="track">
+        <div className="bar" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="pct">{pct}%</span>
     </div>
   );
 }
 
-/** The brand mark: a tally-light dot in a ring. */
-export function TallyDot({ live = false, size = 14 }: { live?: boolean; size?: number }) {
+export function Lamp({
+  kind = 'ok',
+  pulse = false,
+  size,
+}: {
+  kind?: 'ok' | 'rec' | 'warn' | 'off';
+  pulse?: boolean;
+  size?: number;
+}) {
   return (
     <span
-      className={`inline-block rounded-full border-2 ${live ? 'border-rec tally-live' : 'border-line-strong'}`}
-      style={{ width: size, height: size, padding: 2 }}
-    >
-      <span
-        className={`block h-full w-full rounded-full ${live ? 'bg-rec' : 'bg-mute'}`}
-      />
+      className={`lamp ${kind === 'ok' ? '' : kind} ${pulse ? 'pulse' : ''}`}
+      style={size ? { width: size, height: size } : undefined}
+    />
+  );
+}
+
+/** Timecode readout chip. */
+export function Timecode({
+  children,
+  live = false,
+  paused = false,
+  className = '',
+}: {
+  children: ReactNode;
+  live?: boolean;
+  paused?: boolean;
+  className?: string;
+}) {
+  return (
+    <span className={`tc ${live ? 'live' : ''} ${paused ? 'paused' : ''} ${className}`}>
+      {live && <span className="rec-dot">● </span>}
+      {children}
     </span>
   );
 }

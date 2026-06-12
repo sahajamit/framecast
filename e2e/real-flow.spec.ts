@@ -21,10 +21,10 @@ test('real flow with mic: 3s countdown, PiP deck, record → review without a re
   await expect(page.locator('[data-phase="preflight"]')).toBeVisible({ timeout: 15_000 });
 
   await page.getByRole('button', { name: /select screen/i }).click();
-  await expect(page.getByRole('button', { name: /start recording/i })).toBeEnabled({
+  await expect(page.getByRole('button', { name: /roll tape/i })).toBeEnabled({
     timeout: 10_000,
   });
-  await page.getByRole('button', { name: /start recording/i }).click();
+  await page.getByRole('button', { name: /roll tape/i }).click();
 
   // Real countdown is 3 s; the crash fired right as recording began.
   await expect(page.locator('[data-phase="recording"]')).toBeVisible({ timeout: 20_000 });

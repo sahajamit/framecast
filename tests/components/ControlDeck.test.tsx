@@ -45,7 +45,7 @@ describe('ControlDeck transport', () => {
     useStore.getState().patchSettings({ layout: 'screen' });
     useStore.getState().patchSession({ phase: 'recording' });
     render(<ControlDeck windowRef={window} />);
-    expect(screen.queryByText(/cam zoom/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^zoom$/i)).not.toBeInTheDocument();
     useStore.getState().patchSettings({ layout: 'screen+camera' });
   });
 });

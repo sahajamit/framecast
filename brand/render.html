@@ -1,56 +1,88 @@
 <!doctype html>
-<!-- Brand lockup template. Rendered to PNG by render.mjs (?variant=dark|light). -->
+<!-- Brand lockup template (CONSOLE system). Rendered to PNG by render.mjs (?variant=dark|light). -->
 <html>
   <head>
     <meta charset="UTF-8" />
     <style>
       @font-face {
-        font-family: 'Bricolage';
-        src: url('../node_modules/@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2')
+        font-family: 'Big Shoulders';
+        src: url('../node_modules/@fontsource-variable/big-shoulders-display/files/big-shoulders-display-latin-wght-normal.woff2')
           format('woff2-variations');
-        font-weight: 200 800;
+        font-weight: 100 900;
       }
-      html,
-      body {
-        margin: 0;
-        background: transparent;
+      @font-face {
+        font-family: 'Plex Mono';
+        src: url('../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff')
+          format('woff');
+        font-weight: 400;
       }
+      html, body { margin: 0; background: transparent; }
       #lockup {
         display: inline-flex;
         flex-direction: column;
         align-items: center;
-        gap: 18px;
-        padding: 36px 48px;
+        gap: 22px;
+        padding: 40px 52px;
+      }
+      .fcmark {
+        position: relative;
+        width: 170px;
+        height: 170px;
+        --mw: 170px;
+        border-radius: 22.5%;
+        background: linear-gradient(180deg, #2e2820, #1c1916);
+        box-shadow: inset 0 2px 0 rgba(255, 250, 238, 0.10), inset 0 -3px 0 rgba(0, 0, 0, 0.45),
+          0 6px 18px rgba(0, 0, 0, 0.45);
+      }
+      .fcmark::before {
+        content: '';
+        position: absolute;
+        inset: 21% 26% 30% 18%;
+        border: solid #f0e8d8;
+        border-width: calc(var(--mw) * 0.045);
+        border-radius: 12%;
+      }
+      .fcmark::after {
+        content: '';
+        position: absolute;
+        right: 17%;
+        bottom: 17%;
+        width: 27%;
+        height: 27%;
+        border-radius: 50%;
+        background: radial-gradient(circle at 38% 32%, oklch(0.90 0.19 145), oklch(0.62 0.15 145) 70%);
+        box-shadow: 0 0 calc(var(--mw) * 0.14) oklch(0.55 0.12 145),
+          inset 0 calc(var(--mw) * -0.02) calc(var(--mw) * 0.03) rgba(0, 0, 0, 0.4);
       }
       #word {
-        font-family: 'Bricolage', sans-serif;
+        font-family: 'Big Shoulders', sans-serif;
         font-weight: 700;
-        font-size: 84px;
-        letter-spacing: -0.025em;
+        font-size: 72px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
         line-height: 1;
         color: var(--ink);
       }
-      .dark {
-        --ink: #f5f0e8;
-        --accent: #ffb020;
+      #tag {
+        font-family: 'Plex Mono', monospace;
+        font-size: 13px;
+        letter-spacing: 0.34em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        margin-top: 12px;
+        text-align: center;
       }
-      .light {
-        --ink: #141312;
-        --accent: #e09310;
-      }
+      .dark { --ink: #f0e8d8; --ink-3: #756c5c; }
+      .light { --ink: #26211a; --ink-3: #6f6757; }
     </style>
   </head>
   <body>
     <div id="lockup" class="dark">
-      <svg width="220" height="172" viewBox="0 0 100 78" fill="none">
-        <defs>
-          <clipPath id="s"><rect x="10" y="6" width="62" height="46" rx="9" /></clipPath>
-        </defs>
-        <rect x="10" y="6" width="62" height="46" rx="9" stroke="var(--ink)" stroke-width="7" />
-        <circle cx="72" cy="52" r="16" fill="var(--accent)" />
-        <circle cx="72" cy="52" r="16" fill="#FF5A4E" clip-path="url(#s)" />
-      </svg>
-      <div id="word">framecast</div>
+      <div class="fcmark"></div>
+      <div>
+        <div id="word">Framecast</div>
+        <div id="tag">It happens here</div>
+      </div>
     </div>
     <script>
       const variant = new URLSearchParams(location.search).get('variant') || 'dark';

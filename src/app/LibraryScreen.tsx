@@ -5,27 +5,34 @@ import { connectLibraryDir, openInReview, refreshLibrary, toast } from './contro
 import { formatSize } from '../library/scan';
 import { formatDuration, getFileMeta } from '../library/thumbs';
 import { downloadFile } from '../library/fileOps';
+import { Lamp } from '../ui/controls';
 import type { LibraryItem } from '../types';
 
 export function LibraryScreen() {
   const library = useStore((s) => s.library);
+  const setView = useStore((s) => s.setView);
 
   useEffect(() => {
     void refreshLibrary();
   }, []);
 
+  const totalBytes = library.items.reduce((sum, item) => sum + item.size, 0);
+
   if (!library.connected) {
     return (
-      <div className="max-w-[430px] mx-auto rise-in">
-        <div className="panel p-10 flex flex-col items-center gap-4 text-center">
-          <h2 className="font-display font-semibold text-xl">Your recordings live in a folder you choose</h2>
-          <p className="text-[13px] text-mute">
-            framecast streams every take straight to disk — pick (or reconnect) that folder to see
-            your library.
-          </p>
-          <button type="button" className="danger-btn" onClick={() => void connectLibraryDir()}>
-            {library.dirName ? `reconnect “${library.dirName}”` : 'choose save folder'}
-          </button>
+      <div className="rise-in">
+        <div className="banner">
+          <Lamp kind="warn" />
+          <div className="b-msg">
+            <b>Folder disconnected</b>
+            The browser needs permission to re-open your takes folder. Your takes are safe on disk
+            — reconnect to list them.
+          </div>
+          <div className="b-actions">
+            <button type="button" className="btn primary" onClick={() => void connectLibraryDir()}>
+              Reconnect folder
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -33,20 +40,37 @@ export function LibraryScreen() {
 
   return (
     <div className="rise-in flex flex-col gap-4">
-      <div className="flex items-baseline justify-between">
-        <h2 className="font-display font-semibold text-lg">
-          Library <span className="text-mute font-normal">· {library.dirName}</span>
-        </h2>
-        <span className="label-mono">{library.items.length} recordings</span>
+      <div className="flex items-center gap-4 flex-wrap">
+        <span className="lib-title">Tape library</span>
+        <span className="lib-count">
+          {library.items.length} {library.items.length === 1 ? 'take' : 'takes'}
+          {totalBytes > 0 && ` · ${formatSize(totalBytes)}`}
+        </span>
+        <div className="flex-1" />
+        <div className="storage-note">
+          <Lamp size={7} />
+          <span className="truncate">
+            {library.mode === 'opfs' ? (
+              <>Browser storage · <b>use ↓ to export</b> · direct to disk</>
+            ) : (
+              <>Folder · <b>{library.dirName}</b> · direct to disk</>
+            )}
+          </span>
+        </div>
+        <button type="button" className="btn" onClick={() => setView('record')}>
+          Roll new take
+        </button>
       </div>
-      {library.mode === 'opfs' && (
-        <p className="label-mono -mt-2">
-          this browser has no folder picker · recordings live in private browser storage · use ↓ to
-          export
-        </p>
-      )}
+
       {library.items.length === 0 ? (
-        <p className="text-[13px] text-mute">No recordings yet — hit Record and make your first take.</p>
+        <div className="lib-empty">
+          <div className="reel" />
+          <b>No takes on the shelf</b>
+          <span>Your first recording lands here — straight to your disk</span>
+          <button type="button" className="btn primary mt-2.5" onClick={() => setView('record')}>
+            Roll your first take
+          </button>
+        </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {library.items.map((item) => (
@@ -98,68 +122,49 @@ function LibraryCard({ item }: { item: LibraryItem }) {
   };
 
   return (
-    <div className="panel overflow-hidden flex flex-col group">
-      <button
-        type="button"
-        onClick={() => void open()}
-        className="relative aspect-video bg-black cursor-pointer"
-      >
-        {thumbUrl ? (
-          <img src={thumbUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
-        ) : (
-          <span className="absolute inset-0 grid place-items-center label-mono">no preview</span>
-        )}
-        <span className="absolute bottom-1.5 right-1.5 font-mono text-[10px] text-[#F5F0E8] bg-black/70 rounded px-1.5 py-0.5">
-          {formatDuration(duration)}
-        </span>
-        <span
-          className="absolute inset-0 grid place-items-center bg-black/0 group-hover:bg-black/40
-            text-transparent group-hover:text-[#F5F0E8] transition-colors font-mono text-[11px] tracking-[0.15em] uppercase"
-        >
-          open ▸
-        </span>
+    <div className="take-card">
+      <button type="button" className="thumb force-dark" onClick={() => void open()} title="Open in review">
+        {thumbUrl && <img src={thumbUrl} alt="" />}
+        <span className="dur">{formatDuration(duration)}</span>
       </button>
-      <div className="p-2.5 flex flex-col gap-1.5">
-        <span className="text-[12.5px] truncate" title={item.name}>
-          {item.name}
-        </span>
-        <div className="flex items-center justify-between">
-          <span className="font-mono text-[10px] text-faint">
-            {formatSize(item.size)} · {new Date(item.lastModified).toLocaleDateString()}
-          </span>
-          <div className="flex gap-1">
-            <button
-              type="button"
-              title="Download a copy"
-              className="hairline-btn !px-2 !py-1 !text-[10px]"
-              onClick={() =>
-                void (async () => {
-                  const dir = runtime.libraryDir;
-                  if (!dir) return;
-                  const handle = await dir.getFileHandle(item.name);
-                  downloadFile(await handle.getFile(), item.name);
-                })()
-              }
-            >
-              ↓
-            </button>
-            <button
-              type="button"
-              title="Delete"
-              className="hairline-btn !px-2 !py-1 !text-[10px] hover:!border-rec hover:!text-rec"
-              onClick={() =>
-                void (async () => {
-                  const dir = runtime.libraryDir;
-                  if (!dir) return;
-                  await dir.removeEntry(item.name).catch(() => toast('Delete failed.'));
-                  await refreshLibrary();
-                })()
-              }
-            >
-              ✕
-            </button>
-          </div>
-        </div>
+      <div className="tc-name" title={item.name}>
+        {item.name}
+      </div>
+      <div className="tc-meta">
+        <span>{new Date(item.lastModified).toLocaleDateString()}</span>
+        <span>{formatSize(item.size)}</span>
+      </div>
+      <div className="tc-actions">
+        <button
+          type="button"
+          className="btn-s"
+          title="Download a copy"
+          onClick={() =>
+            void (async () => {
+              const dir = runtime.libraryDir;
+              if (!dir) return;
+              const handle = await dir.getFileHandle(item.name);
+              downloadFile(await handle.getFile(), item.name);
+            })()
+          }
+        >
+          ↓ Download
+        </button>
+        <button
+          type="button"
+          className="btn-s danger"
+          title="Delete"
+          onClick={() =>
+            void (async () => {
+              const dir = runtime.libraryDir;
+              if (!dir) return;
+              await dir.removeEntry(item.name).catch(() => toast('Delete failed.'));
+              await refreshLibrary();
+            })()
+          }
+        >
+          Delete
+        </button>
       </div>
     </div>
   );

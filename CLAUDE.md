@@ -51,13 +51,15 @@ Module map: `src/capture` (device acquisition) · `src/audio` (mix graph + meter
 - CDP `Page.crash` never resolves its promise; send it fire-and-forget (see `e2e/recovery.spec.ts`).
 - Unit tests cover pure math only (layout, BS.1770 loudness with sine reference vectors, encoder presets). Keep them free of DOM/media APIs.
 
-## Brand & theming
+## Brand & theming — the CONSOLE system
 
-- Palette mirrors amitrawat.dev (`_tokens.scss` there is the upstream source): warm black `#0B0B0C` / cream `#F5F0E8`, amber accent (`#FFB020` dark mode, `#C97A0E` light mode), coral `#FF5A4E`.
-- **Semantics: amber = interactive** (toggles, sliders, links, trim, focus). **Coral = recording states only** (REC button, tally, stop, danger). Don't mix them.
-- Light/dark themes flip via `data-theme` on `<html>` (tokens in `src/index.css`, runtime-switchable through Tailwind `@theme inline`). **Video surfaces never flip**: anything showing or framing video (stage, PiP deck, players, filmstrips) sits inside a `.force-dark` scope. The PiP window is always dark.
-- Fonts stay Bricolage Grotesque (display) + Spline Sans Mono (UI mono) — framecast's own voice; the palette is what ties it to the brand.
-- Logo: screen outline + amber camera bubble overlapping at the corner, coral lens intersection. Canonical SVG lives in `src/ui/Logo.tsx` (app header; bubble pulses coral while recording) and `public/icon.svg` (favicon/PWA). README lockups are rendered to PNG by `brand/render.mjs` — re-run it after changing the mark.
+- The UI is a piece of recording hardware: bevelled modules, inset slots, throw switches, a punch record key. Design source of truth: `src/tokens.css` (verbatim Claude Design deliverable; `:root` dark + `[data-theme="light"]` color-only overrides + `.force-dark` pin for video surfaces) and the component layer in `src/index.css`.
+- **Red (`--color-rec*`) is sacred**: record/stop/clipping/destructive only. The interactive accent is LED green (`--color-accent`). Never both on one control.
+- Video surfaces (`--color-video*`) are theme-invariant near-black; anything showing or framing video sits in a `.force-dark` scope (stage, deck, players, filmstrips, thumbs). The PiP deck window is pinned dark.
+- Type: Big Shoulders Display = engraving (uppercase + tracked, headings/wordmark only) · Familjen Grotesk = UI body · IBM Plex Mono = every changing value (timecode, dB, %, GB), tabular.
+- Depth = bevels (`--shadow-module`, `--bevel-top`) and slots (`--surface-slot`, `--shadow-slot`), never flat 1px-border cards. Presses travel 1–2px down (`--t-tap`), nothing scales. Countdown beat is 1000 ms, mechanical.
+- Voice is studio/broadcast: Roll tape, On air, Stand by, Take, Tape library. e2e selectors follow this voice (`/roll tape/i`, `/recover take/i`).
+- Logo = hardware badge (engraved frame + LED lens, `.fcmark`); the lens goes red on air — header badge AND favicon (`icon.svg` ↔ `icon-onair.svg` swap in App.tsx). README lockups render via `brand/render.mjs`.
 
 ## Writing style (README, release notes, anything outward)
 

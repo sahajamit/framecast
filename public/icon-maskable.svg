@@ -1,9 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <defs>
-    <clipPath id="s"><rect x="34" y="40" width="52" height="38" rx="8"/></clipPath>
+    <radialGradient id="lens" cx="0.38" cy="0.32" r="0.8">
+      <stop offset="0" stop-color="#9fe870"/><stop offset="0.7" stop-color="#3f9b3f"/><stop offset="1" stop-color="#2f7a32"/>
+    </radialGradient>
   </defs>
-  <rect width="128" height="128" fill="#0B0B0C"/>
-  <rect x="34" y="40" width="52" height="38" rx="8" fill="none" stroke="#F5F0E8" stroke-width="6.5"/>
-  <circle cx="86" cy="78" r="14" fill="#FFB020"/>
-  <circle cx="86" cy="78" r="14" fill="#FF5A4E" clip-path="url(#s)"/>
+  <rect width="128" height="128" fill="#1c1916"/>
+  <rect x="33" y="37" width="52" height="45" rx="7" fill="none" stroke="#f0e8d8" stroke-width="5"/>
+  <circle cx="81" cy="81" r="13" fill="url(#lens)"/>
 </svg>
