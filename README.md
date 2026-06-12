@@ -88,9 +88,3 @@ Teleprompter in the floating deck · dual-mic mixing / separate tracks · backgr
 ## License
 
 MIT © [Amit Rawat](https://amitrawat.dev). Bundles [mediabunny](https://github.com/Vanilagy/mediabunny) (MPL-2.0) as a dependency.
-
----
-
-<div align="center">
-<sub>Inspired by <a href="https://github.com/addyosmani/recorder">addyosmani/recorder</a>, rebuilt around a 2026-grade pipeline: WebCodecs, crash-safe direct-to-disk fragmented MP4, a draggable camera bubble, and local post-production.</sub>
-</div>

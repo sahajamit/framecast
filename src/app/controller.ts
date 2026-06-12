@@ -183,7 +183,15 @@ function surfaceLabel(track: MediaStreamTrack | undefined): string {
 
 function ensureAudioGraph() {
   if (!runtime.audioGraph) runtime.audioGraph = createAudioGraph();
-  if (runtime.audioGraph.ctx.state === 'suspended') void runtime.audioGraph.ctx.resume();
+  const ctx = runtime.audioGraph.ctx;
+  if (ctx.state === 'suspended') {
+    void ctx.resume().catch(() => {});
+    // Autoplay policy keeps a gesture-less AudioContext suspended (dead level
+    // meter in preflight); the first interaction wakes it.
+    const kick = () => void ctx.resume().catch(() => {});
+    window.addEventListener('pointerdown', kick, { once: true });
+    window.addEventListener('keydown', kick, { once: true });
+  }
   return runtime.audioGraph;
 }
 

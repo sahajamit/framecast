@@ -111,9 +111,9 @@ export function App() {
             type="button"
             onClick={() => patchSettings({ theme: theme === 'light' ? 'dark' : 'light' })}
             title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-            className="hairline-btn !py-1.5 !px-2.5"
+            className="hairline-btn !py-1.5"
           >
-            {theme === 'light' ? '☾' : '☀'}
+            {theme === 'light' ? '☾ dark' : '☀ light'}
           </button>
           <span className="label-mono hidden lg:inline" title="Recording codecs">
             h.264{audioCodec ? ` + ${audioCodec}` : ''}
