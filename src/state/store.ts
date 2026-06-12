@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   BubbleGeometry,
   ExportFormat,
@@ -126,6 +126,9 @@ export const useStore = create<AppState>()(
     {
       name: 'framecast-settings',
       version: 2,
+      // window.localStorage explicitly: Node's experimental localStorage
+      // global shadows jsdom's working one in component tests.
+      storage: createJSONStorage(() => window.localStorage),
       partialize: (state) => ({ settings: state.settings }),
       migrate: (persisted, version) => {
         const state = persisted as Partial<Pick<AppState, 'settings'>>;

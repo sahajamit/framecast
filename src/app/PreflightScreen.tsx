@@ -54,12 +54,12 @@ export function PreflightScreen() {
     const cam = camVideoRef.current;
     if (cam && cam.srcObject !== runtime.cameraStream) {
       cam.srcObject = runtime.cameraStream;
-      void cam.play().catch(() => {});
+      void cam.play()?.catch(() => {});
     }
     const screen = screenVideoRef.current;
     if (screen && screen.srcObject !== runtime.displayStream) {
       screen.srcObject = runtime.displayStream;
-      void screen.play().catch(() => {});
+      void screen.play()?.catch(() => {});
     }
   });
 
@@ -377,7 +377,8 @@ function makeScreenPlaceholder(): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = STAGE_W;
   canvas.height = STAGE_H;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas; // e.g. jsdom in component tests
   ctx.fillStyle = '#0f1116';
   ctx.fillRect(0, 0, STAGE_W, STAGE_H);
   ctx.strokeStyle = 'rgba(235,240,255,0.028)';

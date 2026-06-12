@@ -40,6 +40,10 @@ Module map: `src/capture` (device acquisition) · `src/audio` (mix graph + meter
 6. **Recordings are fragmented MP4; every post-op output (trim/convert/enhance/recover) is standard MP4** (`fastStart: false`) for player compatibility.
 7. AAC is probed at boot (`getFirstEncodableAudioCodec`); Opus is the fallback. Never hardcode AAC (Linux CI has no AAC encoder — e2e asserts accept both).
 
+## Invariant #8 (added after issue #4)
+
+**Never let a constructed recording session idle.** `beginRecording()` runs the countdown FIRST, then builds the pipeline and calls `output.start()` immediately. A session constructed before the countdown (encoders + track sources waiting ~3 s for `start()`) crashes Chrome's renderer when a mic is involved. Regression-guarded by `e2e/real-flow.spec.ts`, which records in real mode (3 s countdown, real PiP, folder-mode library via an IDB-seeded handle) and fails on any `page.crash`. A `?cd=N` query param overrides the countdown length for debugging.
+
 ## Testing conventions
 
 - E2E mode is `?e2e=1` (`src/library/fsAccess.ts isE2E()`): library backed by OPFS (no native picker), deck rendered inline (no PiP), 1 s countdown. Playwright launches real Chrome with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream --auto-select-tab-capture-source-by-title=framecast`.

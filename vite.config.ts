@@ -41,7 +41,8 @@ export default defineConfig({
     format: 'es',
   },
   test: {
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.{ts,tsx}'],
     environment: 'node',
+    setupFiles: ['tests/setup.ts'],
   },
 });

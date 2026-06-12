@@ -48,7 +48,7 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
     const video = videoRef.current;
     if (video && session && video.srcObject !== session.previewStream) {
       video.srcObject = session.previewStream;
-      void video.play().catch(() => {});
+      void video.play()?.catch(() => {});
     }
   }, [session, phase]);
 

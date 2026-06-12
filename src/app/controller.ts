@@ -282,6 +282,33 @@ async function beginRecording(): Promise<void> {
   const layout = settings.layout;
 
   try {
+    // Countdown FIRST, pipeline after. A constructed-but-not-started session
+    // (encoders, track sources) left idle through the countdown crashes
+    // Chrome's renderer when an audio track is involved — see issue #4. The
+    // pipeline is built at "0" and starts encoding immediately.
+    const cdOverride = Number(new URLSearchParams(location.search).get('cd'));
+    const seconds = cdOverride > 0 ? cdOverride : isE2E() ? 1 : 3;
+    store().patchSession({ phase: 'countdown', countdown: seconds, micMuted: false });
+    await new Promise<void>((resolve) => {
+      let remaining = seconds;
+      countdownTimer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          if (countdownTimer) clearInterval(countdownTimer);
+          countdownTimer = null;
+          resolve();
+        } else {
+          store().patchSession({ countdown: remaining });
+        }
+      }, 1000);
+    });
+
+    // The user may have hit the browser's "Stop sharing" bar mid-countdown.
+    const displayTrack = runtime.displayStream?.getVideoTracks()[0] ?? null;
+    if (layout !== 'camera' && displayTrack?.readyState !== 'live') {
+      throw new Error('Screen sharing ended before the recording started.');
+    }
+
     const displayAudioTrack = runtime.displayStream?.getAudioTracks()[0] ?? null;
     let graph = runtime.audioGraph;
     if (settings.micEnabled || displayAudioTrack) {
@@ -311,23 +338,6 @@ async function beginRecording(): Promise<void> {
       toast(message);
       void abortRecording();
     };
-
-    // Countdown, then start encoding exactly at zero.
-    const seconds = isE2E() ? 1 : 3;
-    store().patchSession({ phase: 'countdown', countdown: seconds, micMuted: false });
-    await new Promise<void>((resolve) => {
-      let remaining = seconds;
-      countdownTimer = setInterval(() => {
-        remaining -= 1;
-        if (remaining <= 0) {
-          if (countdownTimer) clearInterval(countdownTimer);
-          countdownTimer = null;
-          resolve();
-        } else {
-          store().patchSession({ countdown: remaining });
-        }
-      }, 1000);
-    });
 
     await session.start();
     store().patchSession({
