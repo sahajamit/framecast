@@ -4,11 +4,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// GitHub Pages serves from /framecast/; everywhere else from /.
-const base = process.env.GITHUB_PAGES === 'true' ? '/framecast/' : '/';
-
 export default defineConfig({
-  base,
   plugins: [
     react(),
     tailwindcss(),

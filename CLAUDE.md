@@ -13,7 +13,7 @@ Fully-local screen + camera recorder web app (Chrome-only APIs). Everything — 
 | Lint / format | `npm run lint` / `npm run format` |
 | Build (includes typecheck) | `npm run build` |
 
-CI (`.github/workflows/ci.yml`) runs lint + build + unit + e2e. `pages.yml` deploys `dist/` to https://sahajamit.github.io/framecast/ on every push to main (`GITHUB_PAGES=true` sets the `/framecast/` base path).
+CI (`.github/workflows/ci.yml`) runs lint + build + unit + e2e. `netlify.yml` deploys `dist/` to **https://framecast.amitrawat.dev** (Netlify site `framecast`, headers in `netlify.toml`) on every push to main. The old github.io URL serves a static redirect.
 
 ## Architecture (the 60-second version)
 

@@ -1,4 +1,6 @@
-name: Deploy to GitHub Pages
+# The app moved to https://framecast.amitrawat.dev (Netlify, see netlify.yml).
+# This deploys a static redirect so old github.io links keep working.
+name: Deploy redirect to GitHub Pages
 
 on:
   push:
@@ -15,28 +17,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-        env:
-          GITHUB_PAGES: 'true'
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
   deploy:
-    needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Build redirect page
+        run: |
+          mkdir -p redirect
+          cat > redirect/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <meta http-equiv="refresh" content="0; url=https://framecast.amitrawat.dev/" />
+              <link rel="canonical" href="https://framecast.amitrawat.dev/" />
+              <title>framecast has moved</title>
+            </head>
+            <body style="font-family: system-ui; background: #0B0B0C; color: #F5F0E8; display: grid; place-items: center; height: 100vh; margin: 0">
+              <p>framecast moved to <a style="color: #FFB020" href="https://framecast.amitrawat.dev/">framecast.amitrawat.dev</a></p>
+            </body>
+          </html>
+          HTML
+          cp redirect/index.html redirect/404.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: redirect
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -10,10 +10,10 @@
 Record your screen with a draggable, zoomable camera bubble, baked into the video as you move it.
 Crash-safe MP4 straight to disk. Trim, convert and clean up audio without uploading a single byte.
 
-[**Try it live**](https://sahajamit.github.io/framecast/) · [Quick start](#quick-start) · [Features](#features) · [How it stays local](#how-it-stays-local) · [Roadmap](#roadmap-phase-2)
+[**Try it live**](https://framecast.amitrawat.dev) · [Quick start](#quick-start) · [Features](#features) · [How it stays local](#how-it-stays-local) · [Roadmap](#roadmap-phase-2)
 
 [![CI](https://github.com/sahajamit/framecast/actions/workflows/ci.yml/badge.svg)](https://github.com/sahajamit/framecast/actions/workflows/ci.yml)
-[![Deploy](https://github.com/sahajamit/framecast/actions/workflows/pages.yml/badge.svg)](https://sahajamit.github.io/framecast/)
+[![Netlify Status](https://api.netlify.com/api/v1/badges/baf43150-082b-4b05-bd64-a662505c2555/deploy-status)](https://framecast.amitrawat.dev)
 ![License: MIT](https://img.shields.io/badge/license-MIT-FFB020)
 ![Chrome 122+](https://img.shields.io/badge/Chrome-122%2B-F5F0E8)
 
@@ -50,7 +50,7 @@ npm run dev
 
 Open http://localhost:5173 in **Chrome or Edge 122+** (framecast uses Chrome-only capture APIs: Document Picture-in-Picture, WebCodecs, MediaStreamTrackProcessor, File System Access).
 
-Or skip the clone entirely and use the hosted build: **[sahajamit.github.io/framecast](https://sahajamit.github.io/framecast/)**. It is the same fully-local app; the server only ships static files.
+Or skip the clone entirely and use the hosted build: **[framecast.amitrawat.dev](https://framecast.amitrawat.dev)**. It is the same fully-local app; the server only ships static files.
 
 > **macOS note:** the first screen capture asks for the *Screen Recording* permission
 > (System Settings → Privacy & Security → Screen Recording → enable your browser, then restart it).
