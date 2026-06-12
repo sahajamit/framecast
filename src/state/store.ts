@@ -49,6 +49,8 @@ interface DevicesState {
 }
 
 interface LibraryState {
+  /** 'folder' = user-picked directory via FSA; 'opfs' = browser storage (no FSA, e.g. Brave). */
+  mode: 'folder' | 'opfs';
   dirName: string | null;
   connected: boolean;
   items: LibraryItem[];
@@ -103,7 +105,7 @@ export const useStore = create<AppState>()(
       settings: DEFAULT_SETTINGS,
       session: INITIAL_SESSION,
       devices: { cams: [], mics: [], audioCodec: null },
-      library: { dirName: null, connected: false, items: [], recoverable: [] },
+      library: { mode: 'folder', dirName: null, connected: false, items: [], recoverable: [] },
       view: 'record',
 
       setView: (view) => set({ view }),

@@ -19,6 +19,7 @@ interface Busy {
 export function ReviewScreen() {
   const reviewFileName = useStore((s) => s.session.reviewFileName);
   const audioCodec = useStore((s) => s.devices.audioCodec);
+  const storageMode = useStore((s) => s.library.mode);
 
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -247,8 +248,9 @@ export function ReviewScreen() {
             ))}
           </div>
           <p className="text-[11.5px] text-faint leading-snug">
-            Your recording is already on disk. ↓ downloads a copy; other formats convert locally
-            — nothing is uploaded.
+            {storageMode === 'opfs'
+              ? '↓ downloads the file out of browser storage; other formats convert locally — nothing is uploaded.'
+              : 'Your recording is already on disk. ↓ downloads a copy; other formats convert locally — nothing is uploaded.'}
           </p>
         </div>
 

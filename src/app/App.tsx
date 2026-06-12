@@ -17,6 +17,16 @@ import { ControlDeck } from '../pip/ControlDeck';
 import { LogoLockup } from '../ui/Logo';
 import { discardPart, recoverPart } from '../recorder/recovery';
 import { installTestHook } from './testHook';
+import { storageEstimate } from '../library/fsAccess';
+import { formatSize } from '../library/scan';
+
+async function explainStorage(): Promise<void> {
+  const est = await storageEstimate();
+  const usage = est ? `${formatSize(est.usage)} used of ${formatSize(est.quota)} available. ` : '';
+  toast(
+    `Recordings are kept in this browser's private storage. ${usage}Use the ↓ download button to export files. Chrome and Edge can save directly into a folder you pick.`,
+  );
+}
 
 export function App() {
   const phase = useStore((s) => s.session.phase);
@@ -91,8 +101,8 @@ export function App() {
 
           <button
             type="button"
-            onClick={() => void connectLibraryDir()}
-            title="Recordings folder"
+            onClick={() => void (library.mode === 'opfs' ? explainStorage() : connectLibraryDir())}
+            title={library.mode === 'opfs' ? 'Recordings storage' : 'Recordings folder'}
             className="hairline-btn !py-1.5 hidden md:block max-w-[180px] truncate"
           >
             ⌂ {library.connected ? library.dirName : 'choose folder'}

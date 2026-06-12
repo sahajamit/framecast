@@ -17,9 +17,12 @@ import { listDevices, onDeviceChange, primePermissions } from '../capture/device
 import {
   getSavedDir,
   isE2E,
+  libraryMode,
+  OPFS_DIR_LABEL,
   pickLibraryDir,
   queryDirPermission,
   requestDirPermission,
+  requestPersistence,
 } from '../library/fsAccess';
 import { scanLibrary } from '../library/scan';
 import { openPipWindow, pipSupported } from '../pip/pipWindow';
@@ -47,12 +50,23 @@ export async function bootApp(): Promise<void> {
   await refreshDevices();
   onDeviceChange(() => void refreshDevices());
 
-  const dir = await getSavedDir();
-  if (dir) {
-    runtime.libraryDir = dir;
-    const permission = isE2E() ? 'granted' : await queryDirPermission(dir);
-    store().patchLibrary({ dirName: dir.name, connected: permission === 'granted' });
-    if (permission === 'granted') await refreshLibrary();
+  const mode = libraryMode();
+  store().patchLibrary({ mode });
+  if (mode === 'opfs') {
+    // No folder picker on this browser (e.g. Brave ships with the File System
+    // Access API disabled): recordings live in OPFS, Download is the export.
+    runtime.libraryDir = await getSavedDir();
+    store().patchLibrary({ dirName: OPFS_DIR_LABEL, connected: true });
+    void requestPersistence();
+    await refreshLibrary();
+  } else {
+    const dir = await getSavedDir();
+    if (dir) {
+      runtime.libraryDir = dir;
+      const permission = await queryDirPermission(dir);
+      store().patchLibrary({ dirName: dir.name, connected: permission === 'granted' });
+      if (permission === 'granted') await refreshLibrary();
+    }
   }
 
   store().patchLibrary({ recoverable: await listRecoverableParts() });
@@ -132,8 +146,15 @@ function notifyMediaChanged(): void {
 /* ---------- library folder ---------- */
 
 export async function connectLibraryDir(): Promise<FileSystemDirectoryHandle | null> {
+  if (store().library.mode === 'opfs') {
+    runtime.libraryDir ??= await getSavedDir();
+    store().patchLibrary({ dirName: OPFS_DIR_LABEL, connected: true });
+    await refreshLibrary();
+    return runtime.libraryDir;
+  }
+
   let dir = runtime.libraryDir ?? (await getSavedDir());
-  if (dir && !isE2E()) {
+  if (dir) {
     const permission = await queryDirPermission(dir);
     if (permission === 'prompt' && !(await requestDirPermission(dir))) dir = null;
     if (permission === 'denied') dir = null;
@@ -141,8 +162,12 @@ export async function connectLibraryDir(): Promise<FileSystemDirectoryHandle | n
   if (!dir) {
     try {
       dir = await pickLibraryDir();
-    } catch {
-      return null; // user cancelled the picker
+    } catch (err) {
+      // Cancelling the picker is fine; anything else the user must see.
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        toast(err instanceof Error ? err.message : 'Could not open the folder picker.');
+      }
+      return null;
     }
   }
   runtime.libraryDir = dir;

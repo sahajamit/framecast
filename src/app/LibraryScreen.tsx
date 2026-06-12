@@ -39,6 +39,12 @@ export function LibraryScreen() {
         </h2>
         <span className="label-mono">{library.items.length} recordings</span>
       </div>
+      {library.mode === 'opfs' && (
+        <p className="label-mono -mt-2">
+          this browser has no folder picker · recordings live in private browser storage · use ↓ to
+          export
+        </p>
+      )}
       {library.items.length === 0 ? (
         <p className="text-[13px] text-mute">No recordings yet — hit Record and make your first take.</p>
       ) : (
