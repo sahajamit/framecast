@@ -10,7 +10,7 @@ import { prepareSession } from '../recorder/recordingSession';
 import { PRESETS, probeAudioCodec } from '../recorder/encoderConfig';
 import { listRecoverableParts } from '../recorder/recovery';
 import { createAudioGraph } from '../audio/audioGraph';
-import { getDisplayStream } from '../capture/displayCapture';
+import { captureSurfaceOf, getDisplayStream } from '../capture/displayCapture';
 import { getCameraStream } from '../capture/cameraCapture';
 import { getMicStream } from '../capture/micCapture';
 import { listDevices, onDeviceChange, primePermissions } from '../capture/devices';
@@ -121,6 +121,66 @@ export async function syncMic(): Promise<void> {
   }
 }
 
+/**
+ * Preflight "Select screen": opens the browser's standard share picker (tab /
+ * window / entire screen). Called directly from the user's click so the
+ * gesture requirement is satisfied; the stream stays warm so the preview
+ * shows the real surface and Start can go straight to the countdown.
+ */
+export async function selectScreen(): Promise<void> {
+  const { settings } = store();
+  try {
+    const stream = await getDisplayStream({
+      wantAudio: settings.captureSystemAudio,
+      suppressLocalAudioPlayback: settings.suppressLocalAudioPlayback,
+      fps: PRESETS[settings.presetId].fps,
+    });
+    stopStream(runtime.displayStream);
+    runtime.displayStream = stream;
+    const track = stream.getVideoTracks()[0];
+    if (track) {
+      track.addEventListener('ended', () => {
+        // Browser's "Stop sharing" bar clicked while still in preflight.
+        if (store().session.phase === 'preflight' && runtime.displayStream === stream) {
+          clearScreenSelection();
+        }
+      });
+    }
+    store().patchSession({ screenReady: true, screenInfo: surfaceLabel(track) });
+    notifyMediaChanged();
+  } catch (err) {
+    // Cancelling the picker is fine; anything else the user must see.
+    if (!(err instanceof DOMException && err.name === 'NotAllowedError')) {
+      toast(err instanceof Error ? err.message : 'Could not capture the screen.');
+    }
+  }
+}
+
+export function stopScreenShare(): void {
+  clearScreenSelection();
+}
+
+function clearScreenSelection(): void {
+  stopStream(runtime.displayStream);
+  runtime.displayStream = null;
+  store().patchSession({ screenReady: false, screenInfo: null });
+  notifyMediaChanged();
+}
+
+function surfaceLabel(track: MediaStreamTrack | undefined): string {
+  if (!track) return 'screen';
+  switch (captureSurfaceOf(track)) {
+    case 'tab':
+      return 'browser tab (viewport only)';
+    case 'window':
+      return 'app window';
+    case 'monitor':
+      return 'entire screen';
+    default:
+      return 'screen';
+  }
+}
+
 function ensureAudioGraph() {
   if (!runtime.audioGraph) runtime.audioGraph = createAudioGraph();
   if (runtime.audioGraph.ctx.state === 'suspended') void runtime.audioGraph.ctx.resume();
@@ -192,55 +252,34 @@ export async function refreshRecoverable(): Promise<void> {
 
 /* ---------- recording lifecycle ---------- */
 
-/** Preflight "Start" click: connect folder, open the deck, then capture. */
+/**
+ * Preflight "Start recording" click. The screen was already picked in
+ * preflight (its own user gesture), so this click only has to open the
+ * always-on-top deck and run the countdown.
+ */
 export async function startFlow(): Promise<void> {
+  const layout = store().settings.layout;
+  if (layout !== 'camera' && !runtime.displayStream) {
+    toast('Select the screen you want to record first.');
+    return;
+  }
+
   const dir = await connectLibraryDir();
   if (!dir) {
     toast('Pick a save folder first — recordings stream straight to disk.');
     return;
   }
 
-  const layout = store().settings.layout;
-  const needsPicker = layout !== 'camera';
-
   if (!isE2E() && pipSupported()) {
     const pip = await openPipWindow(380, 470);
-    if (pip) {
-      adoptPipWindow(pip);
-      if (needsPicker) {
-        // Wait for the user's "choose screen" click inside the deck — that
-        // click carries the user gesture getDisplayMedia needs.
-        store().patchSession({ armed: true });
-        return;
-      }
-    }
+    if (pip) adoptPipWindow(pip);
   }
-  await armAndCapture();
+  await beginRecording();
 }
 
-/** Deck "choose screen & go" click (or direct path when no PiP). */
-export async function armAndCapture(): Promise<void> {
+async function beginRecording(): Promise<void> {
   const { settings } = store();
   const layout = settings.layout;
-  store().patchSession({ armed: false });
-
-  try {
-    if (layout !== 'camera') {
-      const mediaDevices = (runtime.pipWindow?.navigator ?? navigator).mediaDevices;
-      runtime.displayStream = await getDisplayStream(
-        {
-          wantAudio: settings.captureSystemAudio,
-          suppressLocalAudioPlayback: settings.suppressLocalAudioPlayback,
-          fps: PRESETS[settings.presetId].fps,
-        },
-        mediaDevices,
-      );
-    }
-  } catch {
-    // User cancelled Chrome's picker — stay armed for another try.
-    if (runtime.pipWindow) store().patchSession({ armed: true });
-    return;
-  }
 
   try {
     const displayAudioTrack = runtime.displayStream?.getAudioTracks()[0] ?? null;
@@ -362,7 +401,7 @@ export async function stopRecording(): Promise<void> {
 export async function abortRecording(): Promise<void> {
   await runtime.session?.abort().catch(() => {});
   cleanupAfterSession();
-  store().patchSession({ phase: 'preflight', armed: false });
+  store().patchSession({ phase: 'preflight' });
   await refreshRecoverable();
 }
 
@@ -370,6 +409,7 @@ function cleanupAfterSession(): void {
   runtime.session = null;
   stopStream(runtime.displayStream);
   runtime.displayStream = null;
+  store().patchSession({ screenReady: false, screenInfo: null });
   runtime.audioGraph?.attachDisplayAudio(null);
   runtime.audioGraph?.setMicMuted(false);
   closePip();
@@ -383,7 +423,7 @@ function adoptPipWindow(pip: Window): void {
   pip.addEventListener('pagehide', () => {
     if (runtime.pipWindow === pip) {
       runtime.pipWindow = null;
-      store().patchSession({ pipOpen: false, armed: false });
+      store().patchSession({ pipOpen: false });
     }
   });
 }
@@ -397,7 +437,7 @@ export async function reopenPip(): Promise<void> {
 export function closePip(): void {
   runtime.pipWindow?.close();
   runtime.pipWindow = null;
-  store().patchSession({ pipOpen: false, armed: false });
+  store().patchSession({ pipOpen: false });
 }
 
 /* ---------- review ---------- */

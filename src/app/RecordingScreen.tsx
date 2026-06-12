@@ -14,7 +14,6 @@ import { isE2E } from '../library/fsAccess';
 export function RecordingScreen() {
   const phase = useStore((s) => s.session.phase);
   const pipOpen = useStore((s) => s.session.pipOpen);
-  const armed = useStore((s) => s.session.armed);
   const countdown = useStore((s) => s.session.countdown);
   const [clock, setClock] = useState('00:00');
 
@@ -48,11 +47,9 @@ export function RecordingScreen() {
             <TallyDot live={phase === 'recording'} size={16} />
             <div className="font-mono text-3xl tabular-nums">{clock}</div>
             <p className="text-[13px] text-mute max-w-[300px] text-center">
-              {armed
-                ? 'Pick what to share in the floating deck.'
-                : phase === 'paused'
-                  ? 'Paused — resume from the floating deck.'
-                  : 'Recording. Drag the camera bubble, pause or stop from the floating deck.'}
+              {phase === 'paused'
+                ? 'Paused — resume from the floating deck.'
+                : 'Recording. Drag the camera bubble, pause or stop from the floating deck.'}
             </p>
             <div className="flex gap-2">
               <button type="button" className="hairline-btn" onClick={togglePause}>

@@ -36,8 +36,10 @@ interface SessionState {
   micMuted: boolean;
   /** Floating control deck (Document PiP) currently open. */
   pipOpen: boolean;
-  /** Deck is open and waiting for the user to pick a screen ("armed"). */
-  armed: boolean;
+  /** A display surface has been picked in preflight and is live. */
+  screenReady: boolean;
+  /** Friendly description of the picked surface ("browser tab", "window"…). */
+  screenInfo: string | null;
   error: string | null;
   reviewFileName: string | null;
 }
@@ -94,7 +96,8 @@ const INITIAL_SESSION: SessionState = {
   lastResumeAt: 0,
   micMuted: false,
   pipOpen: false,
-  armed: false,
+  screenReady: false,
+  screenInfo: null,
   error: null,
   reviewFileName: null,
 };

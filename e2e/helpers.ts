@@ -17,6 +17,11 @@ export async function freshApp(page: Page): Promise<void> {
 }
 
 export async function startRecording(page: Page): Promise<void> {
+  // Preflight step 1: pick the capture surface (auto-selected by the
+  // --auto-select-tab-capture-source-by-title launch flag).
+  await page.getByRole('button', { name: /select screen/i }).click();
+  await expect(page.getByText(/select a screen above/i)).toBeHidden({ timeout: 10_000 });
+  // Step 2: start → countdown → recording.
   await page.getByRole('button', { name: /start recording/i }).click();
   await expect(page.locator('[data-phase="recording"]')).toBeVisible({ timeout: 20_000 });
 }

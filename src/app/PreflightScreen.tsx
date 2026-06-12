@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../state/store';
 import { runtime } from '../recorder/runtime';
-import { onMediaChanged, startFlow, syncCamera, syncMic, updateBubble } from './controller';
+import {
+  onMediaChanged,
+  selectScreen,
+  startFlow,
+  stopScreenShare,
+  syncCamera,
+  syncMic,
+  toast,
+  updateBubble,
+} from './controller';
 import { drawScene } from '../compositor/scene';
 import {
   BUBBLE_MAX_SIZE,
@@ -21,10 +30,13 @@ const STAGE_H = 720;
 export function PreflightScreen() {
   const settings = useStore((s) => s.settings);
   const devices = useStore((s) => s.devices);
+  const screenReady = useStore((s) => s.session.screenReady);
+  const screenInfo = useStore((s) => s.session.screenInfo);
   const { patchSettings, patchBubble } = useStore.getState();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const camVideoRef = useRef<HTMLVideoElement>(null);
+  const screenVideoRef = useRef<HTMLVideoElement>(null);
   const [micLevel, setMicLevel] = useState(0);
   const [, setMediaEpoch] = useState(0);
 
@@ -37,12 +49,17 @@ export function PreflightScreen() {
   }, [settings.micEnabled, settings.micId, settings.micProcessing]);
   useEffect(() => onMediaChanged(() => setMediaEpoch((n) => n + 1)), []);
 
-  // Bind the live camera to a hidden <video> that feeds the preview canvas.
+  // Bind the live camera + screen to hidden <video>s that feed the preview canvas.
   useEffect(() => {
-    const video = camVideoRef.current;
-    if (video && video.srcObject !== runtime.cameraStream) {
-      video.srcObject = runtime.cameraStream;
-      void video.play().catch(() => {});
+    const cam = camVideoRef.current;
+    if (cam && cam.srcObject !== runtime.cameraStream) {
+      cam.srcObject = runtime.cameraStream;
+      void cam.play().catch(() => {});
+    }
+    const screen = screenVideoRef.current;
+    if (screen && screen.srcObject !== runtime.displayStream) {
+      screen.srcObject = runtime.displayStream;
+      void screen.play().catch(() => {});
     }
   });
 
@@ -56,13 +73,18 @@ export function PreflightScreen() {
       if (!ctx) return;
       const cam = camVideoRef.current;
       const camReady = cam && cam.videoWidth > 0 ? cam : null;
+      const screen = screenVideoRef.current;
+      const screenLive =
+        useStore.getState().session.screenReady && screen && screen.videoWidth > 0 ? screen : null;
       const s = useStore.getState().settings;
       drawScene(ctx, {
         outW: STAGE_W,
         outH: STAGE_H,
         layout: s.layout,
         bubble: s.bubble,
-        screen: { img: placeholder, w: STAGE_W, h: STAGE_H },
+        screen: screenLive
+          ? { img: screenLive, w: screenLive.videoWidth, h: screenLive.videoHeight }
+          : { img: placeholder, w: STAGE_W, h: STAGE_H },
         camera: camReady ? { img: camReady, w: camReady.videoWidth, h: camReady.videoHeight } : null,
       });
     };
@@ -86,7 +108,8 @@ export function PreflightScreen() {
     settings.layout === 'screen+camera',
   );
 
-  const canStart = settings.layout !== 'camera' || !!runtime.cameraStream;
+  const canStart =
+    settings.layout === 'camera' ? !!runtime.cameraStream : screenReady;
 
   return (
     <div className="grid lg:grid-cols-[1fr_330px] gap-6 items-start rise-in">
@@ -105,11 +128,13 @@ export function PreflightScreen() {
         </div>
         <div className="flex items-center justify-between px-1">
           <span className="label-mono">
-            {settings.layout === 'screen+camera'
-              ? 'drag the bubble · scroll over it to zoom'
-              : settings.layout === 'screen'
-                ? 'screen only — no camera overlay'
-                : 'camera only — full frame'}
+            {settings.layout !== 'camera' && !screenReady
+              ? 'select a screen to see the live preview'
+              : settings.layout === 'screen+camera'
+                ? 'live preview · drag the bubble · scroll over it to zoom'
+                : settings.layout === 'screen'
+                  ? 'live preview · screen only'
+                  : 'camera only — full frame'}
           </span>
           <span className="label-mono">
             {PRESETS[settings.presetId].label} · h.264
@@ -117,6 +142,7 @@ export function PreflightScreen() {
           </span>
         </div>
         <video ref={camVideoRef} muted playsInline className="hidden" />
+        <video ref={screenVideoRef} muted playsInline className="hidden" />
       </div>
 
       {/* control rail */}
@@ -132,6 +158,42 @@ export function PreflightScreen() {
             ]}
           />
         </Field>
+
+        {settings.layout !== 'camera' && (
+          <div className="panel p-3.5 flex flex-col gap-3">
+            <span className="label-mono">screen</span>
+            {screenReady ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-ok shrink-0" />
+                  <span className="text-[13px] truncate">{screenInfo ?? 'sharing'}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" className="hairline-btn" onClick={() => void selectScreen()}>
+                    ⇄ change
+                  </button>
+                  <button type="button" className="hairline-btn" onClick={stopScreenShare}>
+                    ✕ stop sharing
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void selectScreen()}
+                  className="hairline-btn !border-accent/60 !text-accent hover:!border-accent py-3"
+                >
+                  ⊞ select screen
+                </button>
+                <p className="text-[11.5px] text-faint leading-snug">
+                  Pick a tab, window or your entire screen. A tab share records only the page, no
+                  browser chrome.
+                </p>
+              </>
+            )}
+          </div>
+        )}
 
         {settings.layout !== 'screen' && (
           <div className="panel p-3.5 flex flex-col gap-3.5">
@@ -266,7 +328,12 @@ export function PreflightScreen() {
             <>
               <Toggle
                 checked={settings.captureSystemAudio}
-                onChange={(captureSystemAudio) => patchSettings({ captureSystemAudio })}
+                onChange={(captureSystemAudio) => {
+                  patchSettings({ captureSystemAudio });
+                  if (useStore.getState().session.screenReady) {
+                    toast('Audio capture applies the next time you select a screen.');
+                  }
+                }}
                 label="Capture tab / system audio"
               />
               {settings.captureSystemAudio && (
@@ -294,7 +361,11 @@ export function PreflightScreen() {
           Start recording
         </button>
         <p className="label-mono text-center -mt-2">
-          floating controls pop out · 3‑2‑1 countdown · saved straight to disk
+          {canStart
+            ? 'floating controls pop out · 3‑2‑1 countdown · saved straight to disk'
+            : settings.layout === 'camera'
+              ? 'waiting for the camera…'
+              : 'select a screen above to enable recording'}
         </p>
       </aside>
     </div>
@@ -323,6 +394,6 @@ function makeScreenPlaceholder(): HTMLCanvasElement {
   ctx.fillText('Your screen appears here', STAGE_W / 2, STAGE_H / 2 - 12);
   ctx.fillStyle = 'rgba(235,240,255,0.16)';
   ctx.font = '13px "Spline Sans Mono Variable", monospace';
-  ctx.fillText('YOU PICK A TAB · WINDOW · OR FULL SCREEN WHEN YOU HIT START', STAGE_W / 2, STAGE_H / 2 + 22);
+  ctx.fillText('HIT “SELECT SCREEN” ON THE RIGHT · TAB / WINDOW / ENTIRE SCREEN', STAGE_W / 2, STAGE_H / 2 + 22);
   return canvas;
 }

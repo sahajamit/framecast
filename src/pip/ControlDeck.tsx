@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { elapsedMs, formatElapsed, useStore } from '../state/store';
 import { runtime } from '../recorder/runtime';
-import {
-  armAndCapture,
-  setMicMuted,
-  stopRecording,
-  togglePause,
-  updateBubble,
-} from '../app/controller';
+import { setMicMuted, stopRecording, togglePause, updateBubble } from '../app/controller';
 import { Meter, SliderField, TallyDot } from '../ui/controls';
 import { useBubbleDrag } from '../ui/useBubbleDrag';
 import { readLevel, meterPosition } from '../audio/levelMeter';
@@ -36,7 +30,6 @@ const CORNER_GLYPHS: Record<string, string> = {
  */
 export function ControlDeck({ windowRef }: { windowRef: Window }) {
   const phase = useStore((s) => s.session.phase);
-  const armed = useStore((s) => s.session.armed);
   const countdown = useStore((s) => s.session.countdown);
   const micMuted = useStore((s) => s.session.micMuted);
   const bubble = useStore((s) => s.settings.bubble);
@@ -94,25 +87,6 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
 
   const recording = phase === 'recording';
   const paused = phase === 'paused';
-
-  if (armed) {
-    return (
-      <div className="force-dark h-full flex flex-col items-center justify-center gap-4 p-5 bg-bg text-ink">
-        <TallyDot size={16} />
-        <p className="text-center text-[13px] text-mute max-w-[220px]">
-          Pick the tab, window or screen you want to record. Recording starts after a 3‑second
-          countdown.
-        </p>
-        <button
-          type="button"
-          onClick={() => void armAndCapture()}
-          className="danger-btn px-5 py-3 text-[12px]"
-        >
-          ● Choose screen & start
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div className="force-dark h-full flex flex-col gap-3 p-3 bg-bg text-ink select-none">
