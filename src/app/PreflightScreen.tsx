@@ -286,9 +286,9 @@ export function PreflightScreen() {
           type="button"
           disabled={!canStart}
           onClick={() => void startFlow()}
-          className="group relative w-full rounded-xl bg-rec hover:bg-[#ff4d47] disabled:opacity-40
+          className="group relative w-full rounded-xl bg-rec hover:bg-rec-hot disabled:opacity-40
             disabled:cursor-not-allowed text-white font-display font-semibold text-[15px] py-4
-            transition-colors cursor-pointer shadow-[0_8px_30px_rgba(255,61,54,0.25)]"
+            transition-colors cursor-pointer shadow-[0_8px_30px_rgba(255,90,78,0.28)]"
         >
           <span className="inline-block h-2.5 w-2.5 rounded-full bg-white mr-2 align-middle group-hover:tally-live" />
           Start recording

@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- Brand lockup template. Rendered to PNG by render.mjs (?variant=dark|light). -->
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @font-face {
+        font-family: 'Bricolage';
+        src: url('../node_modules/@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2')
+          format('woff2-variations');
+        font-weight: 200 800;
+      }
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+      }
+      #lockup {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        padding: 36px 48px;
+      }
+      #word {
+        font-family: 'Bricolage', sans-serif;
+        font-weight: 700;
+        font-size: 84px;
+        letter-spacing: -0.025em;
+        line-height: 1;
+        color: var(--ink);
+      }
+      .dark {
+        --ink: #f5f0e8;
+        --accent: #ffb020;
+      }
+      .light {
+        --ink: #141312;
+        --accent: #e09310;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="lockup" class="dark">
+      <svg width="220" height="172" viewBox="0 0 100 78" fill="none">
+        <defs>
+          <clipPath id="s"><rect x="10" y="6" width="62" height="46" rx="9" /></clipPath>
+        </defs>
+        <rect x="10" y="6" width="62" height="46" rx="9" stroke="var(--ink)" stroke-width="7" />
+        <circle cx="72" cy="52" r="16" fill="var(--accent)" />
+        <circle cx="72" cy="52" r="16" fill="#FF5A4E" clip-path="url(#s)" />
+      </svg>
+      <div id="word">framecast</div>
+    </div>
+    <script>
+      const variant = new URLSearchParams(location.search).get('variant') || 'dark';
+      document.getElementById('lockup').className = variant;
+    </script>
+  </body>
+</html>

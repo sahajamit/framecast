@@ -1,35 +1,43 @@
-# framecast
+<div align="center">
 
-**A fully-local screen + camera recorder for creators. Nothing ever leaves your machine.**
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="brand/framecast-lockup-dark.png">
+  <img src="brand/framecast-lockup-light.png" alt="framecast" width="340">
+</picture>
 
-Record your screen (a Chrome tab, a window, or the whole display) with an optional camera bubble
-you can **drag around and zoom — live, while recording**. Every take streams straight to a folder
-you choose as a crash-safe MP4. Trim it, convert it, clean up the audio — all in the browser,
-all offline, no accounts, no uploads, no telemetry.
+### A recording studio in a browser tab. 100% local.
 
-Built for the daily-video workflow: open tab → hit record → talk → stop → upload to YouTube.
+Record your screen with a draggable, zoomable camera bubble, baked into the video as you move it.
+Crash-safe MP4 straight to disk. Trim, convert and clean up audio without uploading a single byte.
+
+[**Try it live**](https://sahajamit.github.io/framecast/) · [Quick start](#quick-start) · [Features](#features) · [How it stays local](#how-it-stays-local) · [Roadmap](#roadmap-phase-2)
+
+[![CI](https://github.com/sahajamit/framecast/actions/workflows/ci.yml/badge.svg)](https://github.com/sahajamit/framecast/actions/workflows/ci.yml)
+[![Deploy](https://github.com/sahajamit/framecast/actions/workflows/pages.yml/badge.svg)](https://sahajamit.github.io/framecast/)
+![License: MIT](https://img.shields.io/badge/license-MIT-FFB020)
+![Chrome 122+](https://img.shields.io/badge/Chrome-122%2B-F5F0E8)
+
+</div>
+
+---
+
+Built for the daily-video workflow: open a tab, hit record, talk, stop, upload to YouTube. No accounts, no cloud, no telemetry. Your takes never leave your machine.
 
 ## Features
 
-- **Three layouts** — screen + camera bubble, screen only, camera only
-- **The camera bubble** — circle or rounded, draggable in the preview *and during the take*
-  (position is baked into the video), snap-to-corner, size slider, and a **zoom slider** so you
-  can frame just your head, not your shoulders
-- **Tab-viewport capture** — sharing a Chrome tab records exactly the page, no omnibox, no chrome
-- **Floating control deck** — an always-on-top mini window (Document Picture-in-Picture) with
-  live preview, drag-to-move bubble, mic mute + level meter, pause/resume, timer and stop
-- **Crash-safe direct-to-disk recording** — WebCodecs hardware H.264 muxed into a fragmented MP4,
-  flushed to disk every 2 seconds; a crashed tab leaves a recoverable take, not a lost one
-- **Pause / resume** with a gapless timeline, plus a 3‑2‑1 countdown
-- **Quality presets** — 1080p/1440p/4K at 30 or 60 fps (default: 1440p30, crisp text on YouTube)
-- **Microphone done right** — device picker, live LED meter, noise suppression / echo
-  cancellation / auto-gain toggles, tab/system audio mixing when available
-- **Review screen** — player, **trim** with filmstrip handles (tail cuts are instant packet
-  copies), export to **MP4 / WebM / MOV**, and one-click **audio enhance** (RNNoise neural
-  denoise + loudness normalization to YouTube's −14 LUFS) — all processed locally
-- **Recordings library** — your save folder, scanned with thumbnails, durations and quick actions
+- **Three layouts**: screen + camera bubble, screen only, camera only
+- **The camera bubble**: circle or rounded, draggable in the preview *and live during the take* (position is baked into the video), snap-to-corner, size slider, and a **zoom slider** so you can frame just your head, not your shoulders
+- **Tab-viewport capture**: sharing a Chrome tab records exactly the page, no omnibox, no browser chrome
+- **Floating control deck**: an always-on-top mini window (Document Picture-in-Picture) with live preview, drag-to-move bubble, mic mute + level meter, pause/resume, timer and stop
+- **Crash-safe direct-to-disk recording**: WebCodecs hardware H.264 muxed into a fragmented MP4, flushed to disk every 2 seconds. A crashed tab leaves a recoverable take, not a lost one
+- **Pause / resume** with a gapless timeline, plus a 3-2-1 countdown
+- **Quality presets**: 1080p / 1440p / 4K at 30 or 60 fps (default 1440p30, crisp text on YouTube)
+- **Microphone done right**: device picker, live LED meter, noise suppression / echo cancellation / auto-gain toggles, tab and system audio mixing where Chrome supports it
+- **Review screen**: player, **trim** with filmstrip handles (tail cuts are instant packet copies), export to **MP4 / WebM / MOV**, and one-click **audio enhance** (RNNoise neural denoise + loudness normalization to YouTube's -14 LUFS), all processed locally
+- **Recordings library**: your save folder, scanned with thumbnails, durations and quick actions
+- **Light and dark themes** (the stage and players stay dark in both, the way a studio should)
 - **Installable PWA**, works fully offline
-- **Keyboard shortcuts** — `Space` pause · `S` stop · `M` mic · `C` bubble · `1–4` snap corners
+- **Keyboard shortcuts**: `Space` pause · `S` stop · `M` mic · `C` bubble · `1`–`4` snap corners
 
 ## Quick start
 
@@ -40,53 +48,49 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 in **Chrome or Edge** (the app uses Chrome-only capture APIs:
-Document Picture-in-Picture, WebCodecs, MediaStreamTrackProcessor, File System Access).
+Open http://localhost:5173 in **Chrome or Edge 122+** (framecast uses Chrome-only capture APIs: Document Picture-in-Picture, WebCodecs, MediaStreamTrackProcessor, File System Access).
 
-> **macOS note:** the first screen capture asks for the *Screen Recording* permission —
-> System Settings → Privacy & Security → Screen Recording → enable your browser, then restart it.
+Or skip the clone entirely and use the hosted build: **[sahajamit.github.io/framecast](https://sahajamit.github.io/framecast/)**. It is the same fully-local app; the server only ships static files.
+
+> **macOS note:** the first screen capture asks for the *Screen Recording* permission
+> (System Settings → Privacy & Security → Screen Recording → enable your browser, then restart it).
 > Tab and window audio capture works; full-screen *system* audio is not reliably available on
-> macOS (that's a Chrome/macOS limitation, not a framecast one).
+> macOS. That is a Chrome/macOS limitation, not a framecast one.
 
 ## How it stays local
 
-- Capture: `getDisplayMedia` + `getUserMedia`
-- Compositing: a Web Worker draws screen + camera bubble onto an `OffscreenCanvas`,
-  frame-driven so it keeps compositing while the tab is hidden
-- Encoding: WebCodecs hardware H.264 (AAC audio when the browser can encode it, Opus otherwise)
-- Muxing: [mediabunny](https://mediabunny.dev) writes a fragmented MP4 **incrementally into OPFS**
-  (synchronous, durable writes), then promotes the finished file into your chosen folder
-- Post-processing (trim / convert / enhance): mediabunny + RNNoise WASM, in-browser
+| Stage | What happens | Where |
+|-------|--------------|-------|
+| Capture | `getDisplayMedia` + `getUserMedia` | Chrome |
+| Compositing | a Web Worker draws screen + camera bubble on an `OffscreenCanvas`, frame-driven so hidden tabs keep compositing | your CPU/GPU |
+| Encoding | WebCodecs hardware H.264, AAC when the browser can encode it (Opus otherwise) | your GPU |
+| Muxing | [mediabunny](https://mediabunny.dev) writes a fragmented MP4 incrementally | your RAM (seconds of it) |
+| Disk | OPFS sync-access writes, flushed every 2 s, promoted to your chosen folder on stop | your SSD |
+| Post (trim / convert / enhance) | mediabunny + RNNoise WASM + a BS.1770 loudness pass | your CPU |
 
-No servers. The GitHub Pages deployment is a static site; you can also just `npm run build`
-and serve `dist/` from anywhere — or install it as a PWA and go offline.
+No servers, no uploads. `npm run build` produces a static `dist/` you can serve from anywhere, or install it as a PWA and go fully offline.
 
 ## Development
 
 ```bash
-npm test        # unit tests (bubble geometry, BS.1770 loudness, encoder presets)
-npm run e2e     # Playwright end-to-end against real Chrome with fake capture devices
+npm test        # unit tests: bubble geometry, BS.1770 loudness, encoder presets
+npm run e2e     # Playwright against real Chrome with fake capture devices
 npm run lint
 npm run build
 ```
 
-The e2e suite records real files (using Chrome's fake camera/mic and auto-selected tab capture),
-then re-opens them with mediabunny to assert duration, codecs and A/V sync — including a
-renderer-crash recovery test.
+The e2e suite records real files (Chrome fake camera/mic, auto-selected tab capture), then re-opens them with mediabunny to assert duration, codecs and A/V sync. That includes a renderer-crash recovery test. Agent-friendly repo notes live in [CLAUDE.md](CLAUDE.md).
 
 ## Roadmap (phase 2)
 
-Teleprompter in the floating deck · dual-mic mixing / separate tracks · background blur ·
-zoom-on-click effects · wallpaper padding · GIF export · 9:16 vertical mode · keyframe-snapped
-instant head-trim · optional Electron wrapper (global hotkeys, full system audio).
+Teleprompter in the floating deck · dual-mic mixing / separate tracks · background blur · zoom-on-click effects · wallpaper padding · GIF export · 9:16 vertical mode · keyframe-snapped instant head-trim · optional Electron wrapper (global hotkeys, full system audio).
 
 ## License
 
-MIT © [Amit Rawat](https://amitrawat.dev). Bundles [mediabunny](https://github.com/Vanilagy/mediabunny)
-(MPL-2.0) as a dependency.
+MIT © [Amit Rawat](https://amitrawat.dev). Bundles [mediabunny](https://github.com/Vanilagy/mediabunny) (MPL-2.0) as a dependency.
 
 ---
 
-*Inspired by [addyosmani/recorder](https://github.com/addyosmani/recorder) — rebuilt around a
-2026-grade pipeline: WebCodecs, crash-safe direct-to-disk fragmented MP4, draggable/zoomable
-camera bubble, and local post-production.*
+<div align="center">
+<sub>Inspired by <a href="https://github.com/addyosmani/recorder">addyosmani/recorder</a>, rebuilt around a 2026-grade pipeline: WebCodecs, crash-safe direct-to-disk fragmented MP4, a draggable camera bubble, and local post-production.</sub>
+</div>

@@ -14,7 +14,7 @@ import { RecordingScreen } from './RecordingScreen';
 import { ReviewScreen } from './ReviewScreen';
 import { LibraryScreen } from './LibraryScreen';
 import { ControlDeck } from '../pip/ControlDeck';
-import { TallyDot } from '../ui/controls';
+import { LogoLockup } from '../ui/Logo';
 import { discardPart, recoverPart } from '../recorder/recovery';
 import { installTestHook } from './testHook';
 
@@ -25,11 +25,19 @@ export function App() {
   const error = useStore((s) => s.session.error);
   const library = useStore((s) => s.library);
   const audioCodec = useStore((s) => s.devices.audioCodec);
+  const theme = useStore((s) => s.settings.theme);
+  const patchSettings = useStore((s) => s.patchSettings);
 
   useEffect(() => {
     installTestHook();
     void bootApp();
   }, []);
+
+  useEffect(() => {
+    const resolved = theme ?? 'dark';
+    document.documentElement.dataset.theme = resolved;
+    document.documentElement.style.colorScheme = resolved;
+  }, [theme]);
 
   // Don't let a tab close kill a take silently.
   useEffect(() => {
@@ -60,8 +68,7 @@ export function App() {
       <header className="border-b border-line">
         <div className="max-w-[1200px] mx-auto px-5 py-3.5 flex items-center gap-5">
           <div className="flex items-center gap-2.5 mr-auto">
-            <TallyDot live={recording} size={15} />
-            <span className="font-display font-bold text-[17px] tracking-tight">framecast</span>
+            <LogoLockup live={recording} />
             <span className="label-mono hidden sm:inline !text-faint">local recording studio</span>
           </div>
 
@@ -90,6 +97,14 @@ export function App() {
           >
             ⌂ {library.connected ? library.dirName : 'choose folder'}
           </button>
+          <button
+            type="button"
+            onClick={() => patchSettings({ theme: theme === 'light' ? 'dark' : 'light' })}
+            title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            className="hairline-btn !py-1.5 !px-2.5"
+          >
+            {theme === 'light' ? '☾' : '☀'}
+          </button>
           <span className="label-mono hidden lg:inline" title="Recording codecs">
             h.264{audioCodec ? ` + ${audioCodec}` : ''}
           </span>
@@ -97,16 +112,16 @@ export function App() {
       </header>
 
       {library.recoverable.length > 0 && !activeTake && (
-        <div className="bg-amber/10 border-b border-amber/30">
+        <div className="bg-accent/10 border-b border-accent/30">
           <div className="max-w-[1200px] mx-auto px-5 py-2.5 flex items-center gap-3 flex-wrap">
-            <span className="text-[13px] text-amber">
+            <span className="text-[13px] text-accent">
               {library.recoverable.length === 1
                 ? 'An interrupted recording can be recovered.'
                 : `${library.recoverable.length} interrupted recordings can be recovered.`}
             </span>
             <button
               type="button"
-              className="hairline-btn !py-1 !border-amber/50 !text-amber hover:!border-amber"
+              className="hairline-btn !py-1 !border-accent/50 !text-accent hover:!border-accent"
               onClick={() =>
                 void (async () => {
                   const dir = runtime.libraryDir ?? (await connectLibraryDir());

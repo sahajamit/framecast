@@ -103,12 +103,12 @@ function LibraryCard({ item }: { item: LibraryItem }) {
         ) : (
           <span className="absolute inset-0 grid place-items-center label-mono">no preview</span>
         )}
-        <span className="absolute bottom-1.5 right-1.5 font-mono text-[10px] bg-black/70 rounded px-1.5 py-0.5">
+        <span className="absolute bottom-1.5 right-1.5 font-mono text-[10px] text-[#F5F0E8] bg-black/70 rounded px-1.5 py-0.5">
           {formatDuration(duration)}
         </span>
         <span
           className="absolute inset-0 grid place-items-center bg-black/0 group-hover:bg-black/40
-            text-transparent group-hover:text-ink transition-colors font-mono text-[11px] tracking-[0.15em] uppercase"
+            text-transparent group-hover:text-[#F5F0E8] transition-colors font-mono text-[11px] tracking-[0.15em] uppercase"
         >
           open ▸
         </span>

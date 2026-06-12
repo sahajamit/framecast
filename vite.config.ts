@@ -24,8 +24,8 @@ export default defineConfig({
         short_name: 'framecast',
         description:
           'Fully-local screen + camera recorder for creators. Nothing ever leaves your machine.',
-        theme_color: '#0c0d10',
-        background_color: '#0c0d10',
+        theme_color: '#0B0B0C',
+        background_color: '#0B0B0C',
         display: 'standalone',
         icons: [
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },

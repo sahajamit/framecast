@@ -31,6 +31,8 @@ export async function openPipWindow(width: number, height: number): Promise<Wind
     copyStylesInto(pip);
     pip.document.title = 'framecast — controls';
     pip.document.documentElement.style.colorScheme = 'dark';
+    // The deck is a video surface: always dark, regardless of the app theme.
+    pip.document.documentElement.dataset.theme = 'dark';
     pip.document.body.className = document.body.className;
     return pip;
   } catch {

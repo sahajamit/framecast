@@ -2,19 +2,61 @@
 @import '@fontsource-variable/spline-sans-mono';
 @import 'tailwindcss';
 
+/*
+ * Design tokens, mirrored from amitrawat.dev (_tokens.scss).
+ * Dark is the default; light mode flips via <html data-theme="light">.
+ * `.force-dark` pins the dark set on video surfaces (stage, deck, players)
+ * so media always sits on warm black regardless of the app theme.
+ * Semantics: amber = interactive accent · coral = recording/danger only.
+ */
+:root,
+.force-dark {
+  --fc-bg: #0b0b0c;
+  --fc-panel: #131316;
+  --fc-panel-2: #1a1a1f;
+  --fc-line: rgba(245, 240, 232, 0.1);
+  --fc-line-strong: rgba(245, 240, 232, 0.22);
+  --fc-ink: #f5f0e8;
+  --fc-mute: #a9a196;
+  --fc-faint: #6a6358;
+  --fc-accent: #ffb020;
+  --fc-accent-hot: #ffc248;
+  --fc-grain: 0.05;
+}
+
+[data-theme='light'] {
+  --fc-bg: #f5f0e8;
+  --fc-panel: #ffffff;
+  --fc-panel-2: #eae3d7;
+  --fc-line: rgba(20, 19, 18, 0.1);
+  --fc-line-strong: rgba(20, 19, 18, 0.22);
+  --fc-ink: #141312;
+  --fc-mute: #5a544b;
+  --fc-faint: #9f9a90;
+  --fc-accent: #c97a0e;
+  --fc-accent-hot: #d88a1f;
+  --fc-grain: 0.03;
+}
+
+/* Theme-flipping colors: utilities reference the var, so swaps are instant. */
+@theme inline {
+  --color-bg: var(--fc-bg);
+  --color-panel: var(--fc-panel);
+  --color-panel-2: var(--fc-panel-2);
+  --color-line: var(--fc-line);
+  --color-line-strong: var(--fc-line-strong);
+  --color-ink: var(--fc-ink);
+  --color-mute: var(--fc-mute);
+  --color-faint: var(--fc-faint);
+  --color-accent: var(--fc-accent);
+  --color-accent-hot: var(--fc-accent-hot);
+}
+
+/* Constants: recording coral (the channel red) and meter green. */
 @theme {
-  --color-bg: #0b0c0f;
-  --color-panel: #14161b;
-  --color-panel-2: #1a1d24;
-  --color-line: rgba(235, 240, 255, 0.08);
-  --color-line-strong: rgba(235, 240, 255, 0.16);
-  --color-ink: #e9ebef;
-  --color-mute: #878e9b;
-  --color-faint: #565d6a;
-  --color-rec: #ff3d36;
-  --color-rec-deep: #b3261f;
+  --color-rec: #ff5a4e;
+  --color-rec-hot: #ff6f64;
   --color-ok: #3ddc84;
-  --color-amber: #ffb224;
 
   --font-display: 'Bricolage Grotesque Variable', 'Avenir Next', system-ui, sans-serif;
   --font-mono: 'Spline Sans Mono Variable', ui-monospace, 'SF Mono', monospace;
@@ -27,8 +69,16 @@ body {
 
 body {
   @apply bg-bg text-ink font-display antialiased;
-  background-image: radial-gradient(1200px 700px at 50% -10%, rgba(255, 61, 54, 0.05), transparent 60%),
-    radial-gradient(900px 600px at 90% 110%, rgba(61, 220, 132, 0.03), transparent 60%);
+  background-image: radial-gradient(
+      1200px 700px at 50% -10%,
+      color-mix(in srgb, var(--fc-accent) 5%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 600px at 90% 110%,
+      color-mix(in srgb, var(--fc-accent) 3%, transparent),
+      transparent 60%
+    );
 }
 
 /* Fine film grain over everything. */
@@ -38,7 +88,7 @@ body::after {
   inset: 0;
   pointer-events: none;
   z-index: 60;
-  opacity: 0.05;
+  opacity: var(--fc-grain);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
 }
 
@@ -54,8 +104,8 @@ body::after {
 
 .hairline-btn {
   @apply font-mono text-[11px] tracking-[0.12em] uppercase border border-line-strong rounded-lg px-3 py-2
-    text-ink hover:border-ink/40 hover:bg-white/5 transition-colors cursor-pointer
-    disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent;
+    text-ink hover:border-accent hover:text-accent transition-colors cursor-pointer
+    disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-line-strong disabled:hover:text-ink;
 }
 
 .danger-btn {
@@ -64,7 +114,7 @@ body::after {
     border-rec/50 text-rec hover:border-rec hover:bg-rec/10;
 }
 
-/* Viewfinder corner ticks around the stage. */
+/* Viewfinder corner ticks around the stage (always over dark media). */
 .viewfinder {
   position: relative;
 }
@@ -76,7 +126,7 @@ body::after {
   position: absolute;
   width: 18px;
   height: 18px;
-  border-color: rgba(235, 240, 255, 0.35);
+  border-color: rgba(245, 240, 232, 0.35);
   border-style: solid;
   border-width: 0;
   z-index: 5;
@@ -107,18 +157,39 @@ body::after {
   border-right-width: 2px;
 }
 
-/* Breathing tally light. */
+/* Breathing tally light (recording = coral, always). */
 @keyframes tally {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 61, 54, 0.55);
+    box-shadow: 0 0 0 0 rgba(255, 90, 78, 0.55);
   }
   50% {
-    box-shadow: 0 0 0 7px rgba(255, 61, 54, 0);
+    box-shadow: 0 0 0 7px rgba(255, 90, 78, 0);
   }
 }
 .tally-live {
   animation: tally 1.6s ease-in-out infinite;
+}
+
+/* Logo bubble ring pulse while recording. */
+@keyframes logoRing {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+.logo-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: logoRing 1.6s ease-out infinite;
 }
 
 @keyframes riseIn {
@@ -158,7 +229,7 @@ body::after {
   animation: countPop 0.96s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-/* Range sliders, studio-fader style. */
+/* Range sliders, studio-fader style. Fill = amber (interactive). */
 input[type='range'].fader {
   -webkit-appearance: none;
   appearance: none;
@@ -172,9 +243,9 @@ input[type='range'].fader::-webkit-slider-runnable-track {
   border-radius: 2px;
   background: linear-gradient(
     to right,
-    var(--color-rec) 0%,
-    var(--color-rec) var(--fill, 50%),
-    rgba(235, 240, 255, 0.14) var(--fill, 50%)
+    var(--fc-accent) 0%,
+    var(--fc-accent) var(--fill, 50%),
+    var(--fc-line-strong) var(--fill, 50%)
   );
 }
 input[type='range'].fader::-webkit-slider-thumb {
@@ -184,16 +255,16 @@ input[type='range'].fader::-webkit-slider-thumb {
   width: 8px;
   height: 16px;
   border-radius: 3px;
-  background: #e9ebef;
-  border: 1px solid rgba(0, 0, 0, 0.6);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  background: var(--fc-ink);
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 video::-webkit-media-controls-enclosure {
   border-radius: 0 0 12px 12px;
 }
 
-/* Dual-handle trim range: track is invisible, only the tall thumbs interact. */
+/* Dual-handle trim range: track invisible, tall amber thumbs interact. */
 input[type='range'].trim-range {
   -webkit-appearance: none;
   appearance: none;
@@ -216,8 +287,8 @@ input[type='range'].trim-range::-webkit-slider-thumb {
   width: 10px;
   height: 56px;
   border-radius: 3px;
-  background: var(--color-rec);
-  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: var(--fc-accent);
+  border: 2px solid rgba(255, 255, 255, 0.4);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
   cursor: ew-resize;
 }

@@ -12,6 +12,7 @@ import type {
 import { DEFAULT_BUBBLE } from '../compositor/layout';
 
 export interface Settings {
+  theme: 'dark' | 'light';
   layout: LayoutKind;
   micEnabled: boolean;
   micId: string | null;
@@ -71,6 +72,7 @@ export interface AppState {
 }
 
 const DEFAULT_SETTINGS: Settings = {
+  theme: 'dark',
   layout: 'screen+camera',
   micEnabled: true,
   micId: null,
@@ -118,8 +120,15 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'framecast-settings',
-      version: 1,
+      version: 2,
       partialize: (state) => ({ settings: state.settings }),
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<Pick<AppState, 'settings'>>;
+        if (version < 2 && state.settings) {
+          state.settings = { ...DEFAULT_SETTINGS, ...state.settings };
+        }
+        return state;
+      },
     },
   ),
 );

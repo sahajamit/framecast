@@ -148,11 +148,11 @@ export function ReviewScreen() {
           <div className="relative h-14 rounded-md overflow-hidden border border-line">
             <canvas ref={stripRef} width={800} height={56} className="absolute inset-0 w-full h-full" />
             <div
-              className="absolute inset-y-0 left-0 bg-black/70 border-r-2 border-rec"
+              className="absolute inset-y-0 left-0 bg-black/70 border-r-2 border-accent"
               style={{ width: `${(trimIn / duration) * 100}%` }}
             />
             <div
-              className="absolute inset-y-0 right-0 bg-black/70 border-l-2 border-rec"
+              className="absolute inset-y-0 right-0 bg-black/70 border-l-2 border-accent"
               style={{ width: `${Math.max(0, (1 - effOut / duration) * 100)}%` }}
             />
             <input

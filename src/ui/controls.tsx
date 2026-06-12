@@ -60,7 +60,7 @@ export function Toggle({
       <span className="text-[13px] text-ink/90">{label}</span>
       <span
         className={`relative inline-flex h-[18px] w-[32px] shrink-0 items-center rounded-full border transition-colors ${
-          checked ? 'bg-rec/80 border-rec' : 'bg-panel-2 border-line-strong'
+          checked ? 'bg-accent/85 border-accent' : 'bg-panel-2 border-line-strong'
         }`}
       >
         <input
@@ -164,14 +164,14 @@ export function Meter({ level }: { level: number }) {
         const on = i < lit;
         const frac = i / METER_SEGMENTS;
         const color =
-          frac < 0.62 ? 'var(--color-ok)' : frac < 0.85 ? 'var(--color-amber)' : 'var(--color-rec)';
+          frac < 0.62 ? 'var(--color-ok)' : frac < 0.85 ? 'var(--fc-accent)' : 'var(--color-rec)';
         return (
           <span
             key={i}
             className="flex-1 rounded-[1.5px] transition-opacity duration-75"
             style={{
               height: '100%',
-              background: on ? color : 'rgba(235,240,255,0.09)',
+              background: on ? color : 'var(--fc-line)',
               boxShadow: on ? `0 0 6px ${color}44` : 'none',
             }}
           />
@@ -183,9 +183,9 @@ export function Meter({ level }: { level: number }) {
 
 export function ProgressBar({ fraction }: { fraction: number }) {
   return (
-    <div className="h-[4px] w-full rounded-full bg-white/10 overflow-hidden">
+    <div className="h-[4px] w-full rounded-full bg-line-strong overflow-hidden">
       <div
-        className="h-full rounded-full bg-rec transition-[width] duration-200"
+        className="h-full rounded-full bg-accent transition-[width] duration-200"
         style={{ width: `${Math.round(Math.min(1, Math.max(0, fraction)) * 100)}%` }}
       />
     </div>

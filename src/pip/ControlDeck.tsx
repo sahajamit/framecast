@@ -97,7 +97,7 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
 
   if (armed) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 p-5 bg-bg">
+      <div className="force-dark h-full flex flex-col items-center justify-center gap-4 p-5 bg-bg text-ink">
         <TallyDot size={16} />
         <p className="text-center text-[13px] text-mute max-w-[220px]">
           Pick the tab, window or screen you want to record. Recording starts after a 3‑second
@@ -115,7 +115,7 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
   }
 
   return (
-    <div className="h-full flex flex-col gap-3 p-3 bg-bg select-none">
+    <div className="force-dark h-full flex flex-col gap-3 p-3 bg-bg text-ink select-none">
       {/* preview + drag overlay */}
       <div
         className="relative rounded-lg overflow-hidden border border-line bg-black aspect-video"
@@ -138,7 +138,7 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
         )}
         {paused && (
           <div className="absolute inset-0 grid place-items-center bg-black/50">
-            <span className="label-mono !text-amber !text-[12px]">paused</span>
+            <span className="label-mono !text-accent !text-[12px]">paused</span>
           </div>
         )}
         <div className="absolute top-1.5 left-1.5 flex items-center gap-1.5 bg-black/55 rounded-md px-2 py-1">
@@ -198,7 +198,7 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
           <button
             type="button"
             onClick={() => setMicMuted(!micMuted)}
-            className={`hairline-btn !px-2.5 !py-1.5 ${micMuted ? '!border-amber/60 !text-amber' : ''}`}
+            className={`hairline-btn !px-2.5 !py-1.5 ${micMuted ? '!border-accent/60 !text-accent' : ''}`}
             title="Toggle mic (M)"
           >
             {micMuted ? 'mic off' : 'mic on'}
