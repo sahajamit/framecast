@@ -28,7 +28,7 @@ getDisplayMedia / getUserMedia
   → on stop: finalize + copy into the user's library folder (FSA dir handle)
 ```
 
-Module map: `src/capture` (device acquisition) · `src/audio` (mix graph + meters) · `src/compositor` (worker, **pure geometry in `layout.ts`**, shared renderer in `scene.ts`, code-drawn backdrops in `backdrops.ts`) · `src/recorder` (session orchestrator, encoder presets, OPFS writer, crash recovery) · `src/convert` (trim + MP4/WebM/MOV via mediabunny Conversion) · `src/enhance` (RNNoise + BS.1770 loudness, video packets pass through untouched) · `src/library` (FSA folder, scan, thumbs) · `src/pip` (Document PiP deck) · `src/state` (zustand; **live objects go in `src/recorder/runtime.ts`, never the store**) · `src/app` (screens + `controller.ts` orchestration).
+Module map: `src/capture` (device acquisition) · `src/audio` (mix graph + meters) · `src/compositor` (worker, **pure geometry in `layout.ts`**, shared renderer in `scene.ts`, code-drawn backdrops in `backdrops.ts`, zoom/spotlight easing in `focus.ts`) · `src/recorder` (session orchestrator, encoder presets, OPFS writer, crash recovery) · `src/convert` (trim + MP4/WebM/MOV via mediabunny Conversion) · `src/enhance` (RNNoise + BS.1770 loudness, video packets pass through untouched) · `src/library` (FSA folder, scan, thumbs) · `src/pip` (Document PiP deck) · `src/state` (zustand; **live objects go in `src/recorder/runtime.ts`, never the store**) · `src/app` (screens + `controller.ts` orchestration).
 
 ## Invariants — do not break these
 
@@ -52,10 +52,19 @@ Module map: `src/capture` (device acquisition) · `src/audio` (mix graph + meter
 - **Backdrops are theme-invariant and code-drawn.** Colors are hardcoded in `backdrops.ts` (never CSS tokens) because the backdrop is part of the recording, not the chrome, so it must not flip with the app theme. No image assets (keeps the PWA flat); the `blur` backdrop samples the live screen via a downscaled scratch buffer.
 - **`backdrop:'none'` + pad 0 + radius 0 reproduces the original full-bleed output.** e2e runs this raw path by default (`freshApp` sets it); `e2e/scene.spec.ts` opts into framing and samples a decoded corner pixel to prove the backdrop is baked into the MP4. Framing is on by default for real use (`DEFAULT_FRAME`, charcoal preset).
 
+## Invariant #10 (added with issue #6 — live zoom + spotlight)
+
+**Screen zoom/spotlight is one `ScreenFocus` region, animated in the renderer, and transient.** `ScreenFocus {mode, cx, cy, w, h}` is normalized to the screen content; zoom crops it to fill the frame (`screenSrcRect`, implied zoom `1/w` ≤ `FOCUS_ZOOM_MAX`), spotlight dims outside it (even-odd hole). Rules:
+
+- **Deck-driven, never cursor-following.** getDisplayMedia gives pixels only (no OS cursor/clicks over the shared app), so all targeting is on framecast's own preview (drag a box / click / scroll), not auto-zoom. True follow-cursor would need the roadmap's Electron wrapper.
+- **The glide lives in the compositor, shared by worker + preflight.** `FocusAnimator` (`compositor/focus.ts`) eases the rect; the worker self-sustains draws at frame rate while animating (`draw()` re-arms `scheduleDraw` until `tick` returns false), so it runs even in a hidden tab. The preflight preview runs its own `FocusAnimator` for WYSIWYG rehearsal. Exiting glides the rect back holding the outgoing mode, then settles to `none` — never snap.
+- **Transient + reset on arm.** `focus` lives at the store top level (not persisted, like `session`) and resets to `DEFAULT_FOCUS` in `beginRecording` and `cleanupAfterSession`, so a rehearsal punch never leaks into a take. `mode:'none'` / `w:1` is byte-identical to the un-zoomed output.
+- **Reduced motion is read on the main thread** (`ui/reducedMotion.ts`) and passed as `animate` on every `setFocus` (the worker can't read matchMedia). `0` / `Esc` exit. The gesture (`ui/useStageGestures.ts`) commits on pointer-up (a marquee shows the box), arbitrates bubble-grab vs box-draw, and is never gated on the camera bubble (screen-only is the primary case).
+
 ## Testing conventions
 
 - E2E mode is `?e2e=1` (`src/library/fsAccess.ts isE2E()`): library backed by OPFS (no native picker), deck rendered inline (no PiP), 1 s countdown. Playwright launches real Chrome with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream --auto-select-tab-capture-source-by-title=framecast`.
-- Test hooks live on `window.__framecast` (`src/app/testHook.ts`), only in e2e mode: `listLibrary()`, `inspectFile(name)` (re-opens output with mediabunny and returns duration/codecs — this is how specs assert real file contents), `setFrame(patch)` (drive scene framing deterministically), `sampleTopLeft(name)` (decode a frame and read a corner pixel).
+- Test hooks live on `window.__framecast` (`src/app/testHook.ts`), only in e2e mode: `listLibrary()`, `inspectFile(name)` (re-opens output with mediabunny and returns duration/codecs — this is how specs assert real file contents), `setFrame(patch)` / `setFocus(patch)` (drive scene framing / live zoom deterministically), `sampleTopLeft(name)` and `samplePixel(name, nx, ny)` (decode a frame and read a pixel).
 - CDP `Page.crash` never resolves its promise; send it fire-and-forget (see `e2e/recovery.spec.ts`).
 - Unit tests cover pure math only (layout, BS.1770 loudness with sine reference vectors, encoder presets). Keep them free of DOM/media APIs.
 
@@ -75,4 +84,4 @@ No em dashes. Use periods, commas, colons or parentheses. (House rule for everyt
 
 ## Phase 2 backlog
 
-Tracked in README "Roadmap": teleprompter in the deck, dual-mic, background blur, live zoom (issue #6), GIF export, 9:16 vertical, keyframe-snapped head-trim, Electron wrapper. (Scene framing / "wallpaper padding" shipped via issue #5.)
+Tracked in README "Roadmap": teleprompter in the deck, dual-mic, background blur, GIF export, 9:16 vertical, keyframe-snapped head-trim, Electron wrapper. (Scene framing shipped via #5; live zoom + spotlight via #6 — a future follow-cursor/auto-zoom would build on #6 via the Electron wrapper.)

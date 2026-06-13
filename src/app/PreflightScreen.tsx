@@ -3,6 +3,7 @@ import { useStore } from '../state/store';
 import { runtime } from '../recorder/runtime';
 import {
   onMediaChanged,
+  resetFocus,
   selectScreen,
   startFlow,
   stopScreenShare,
@@ -10,12 +11,19 @@ import {
   syncMic,
   toast,
   updateBubble,
+  updateFocus,
   updateFrame,
 } from './controller';
 import { drawScene } from '../compositor/scene';
+import { FocusAnimator } from '../compositor/focus';
 import {
   BUBBLE_MAX_SIZE,
   BUBBLE_MIN_SIZE,
+  DEFAULT_FOCUS,
+  FOCUS_GLIDE_MS,
+  FOCUS_ZOOM_MAX,
+  focusForZoom,
+  focusZoomFactor,
   PAD_MAX,
   RADIUS_MAX,
   screenFrameRect,
@@ -24,7 +32,8 @@ import {
 } from '../compositor/layout';
 import { Fader, Module, Segmented, SelectField, Switch, Timecode, VuMeter } from '../ui/controls';
 import { BackdropPicker } from '../ui/BackdropPicker';
-import { useBubbleDrag } from '../ui/useBubbleDrag';
+import { useStageGestures, type FocusTool } from '../ui/useStageGestures';
+import { prefersReducedMotion } from '../ui/reducedMotion';
 import { meterPosition, readLevel } from '../audio/levelMeter';
 import { PRESETS } from '../recorder/encoderConfig';
 import type { PresetId } from '../types';
@@ -37,12 +46,16 @@ export function PreflightScreen() {
   const devices = useStore((s) => s.devices);
   const screenReady = useStore((s) => s.session.screenReady);
   const screenInfo = useStore((s) => s.session.screenInfo);
+  const focus = useStore((s) => s.focus);
   const { patchSettings, patchBubble } = useStore.getState();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const camVideoRef = useRef<HTMLVideoElement>(null);
   const screenVideoRef = useRef<HTMLVideoElement>(null);
+  const focusAnim = useRef(new FocusAnimator(DEFAULT_FOCUS));
+  const lastFocusTarget = useRef(DEFAULT_FOCUS);
   const [micLevel, setMicLevel] = useState(0);
+  const [tool, setTool] = useState<FocusTool>('off');
   const [, setMediaEpoch] = useState(0);
 
   // Acquire / release devices to match settings.
@@ -81,17 +94,31 @@ export function PreflightScreen() {
       const screen = screenVideoRef.current;
       const screenLive =
         useStore.getState().session.screenReady && screen && screen.videoWidth > 0 ? screen : null;
-      const s = useStore.getState().settings;
+      const live = useStore.getState();
+      const s = live.settings;
+      // Rehearse the punch-in with the same easer the recording uses (WYSIWYG).
+      if (live.focus !== lastFocusTarget.current) {
+        lastFocusTarget.current = live.focus;
+        focusAnim.current.setTarget(
+          live.focus,
+          prefersReducedMotion() ? 0 : FOCUS_GLIDE_MS,
+          performance.now(),
+        );
+      }
+      focusAnim.current.tick(performance.now());
       drawScene(ctx, {
         outW: STAGE_W,
         outH: STAGE_H,
         layout: s.layout,
         bubble: s.bubble,
         frame: s.frame,
+        focus: focusAnim.current.current,
         screen: screenLive
           ? { img: screenLive, w: screenLive.videoWidth, h: screenLive.videoHeight }
           : { img: placeholder, w: STAGE_W, h: STAGE_H },
-        camera: camReady ? { img: camReady, w: camReady.videoWidth, h: camReady.videoHeight } : null,
+        camera: camReady
+          ? { img: camReady, w: camReady.videoWidth, h: camReady.videoHeight }
+          : null,
       });
     };
     render();
@@ -107,23 +134,35 @@ export function PreflightScreen() {
     return () => clearInterval(tick);
   }, [settings.micEnabled]);
 
-  const { handlers, cursor } = useBubbleDrag(
-    () => ({ w: STAGE_W, h: STAGE_H }),
-    settings.layout === 'screen+camera',
-    () => {
+  const { handlers, cursor, marquee } = useStageGestures(() => ({ w: STAGE_W, h: STAGE_H }), {
+    bubbleEnabled: settings.layout === 'screen+camera',
+    focusEnabled: settings.layout !== 'camera' && screenReady,
+    getTool: () => tool,
+    getFrame: () => {
       const f = useStore.getState().settings.frame;
       // Snap to the screen frame (so the bubble can straddle the border) only
       // when framing is on; otherwise keep the canvas-corner snap.
-      return f.backdrop !== 'none' || f.pad > 0 ? screenFrameRect(f.pad, STAGE_W, STAGE_H) : undefined;
+      return f.backdrop !== 'none' || f.pad > 0
+        ? screenFrameRect(f.pad, STAGE_W, STAGE_H)
+        : undefined;
     },
-  );
+  });
+
+  function selectFocusTool(t: FocusTool) {
+    setTool(t);
+    if (t === 'off') resetFocus();
+  }
+  function punchPreset(z: number) {
+    setTool('zoom');
+    updateFocus(focusForZoom(z));
+  }
 
   const needsScreen = settings.layout !== 'camera';
   const canStart = settings.layout === 'camera' ? !!runtime.cameraStream : screenReady;
   const micName = deviceLabel(devices.mics, settings.micId) ?? 'Default microphone';
 
   return (
-    <div className="grid lg:grid-cols-[1fr_336px] gap-5 items-start rise-in">
+    <div className="preflight-grid rise-in">
       {/* program monitor */}
       <div className="monitor">
         <div className="monitor-head">
@@ -131,7 +170,11 @@ export function PreflightScreen() {
             Program <em>monitor</em>
           </span>
           <span className="src-read">
-            {needsScreen ? (screenReady ? (screenInfo ?? 'sharing') : 'no source selected') : 'camera only'}
+            {needsScreen
+              ? screenReady
+                ? (screenInfo ?? 'sharing')
+                : 'no source selected'
+              : 'camera only'}
           </span>
           <div className="monitor-actions">
             {needsScreen &&
@@ -145,11 +188,7 @@ export function PreflightScreen() {
                   </button>
                 </>
               ) : (
-                <button
-                  type="button"
-                  className="btn-s accent"
-                  onClick={() => void selectScreen()}
-                >
+                <button type="button" className="btn-s accent" onClick={() => void selectScreen()}>
                   ⊞ Select screen
                 </button>
               ))}
@@ -157,6 +196,17 @@ export function PreflightScreen() {
         </div>
         <div className="stage force-dark" style={{ cursor, touchAction: 'none' }} {...handlers}>
           <canvas ref={canvasRef} width={STAGE_W} height={STAGE_H} />
+          {marquee && (
+            <div
+              className="focus-marquee"
+              style={{
+                left: marquee.left,
+                top: marquee.top,
+                width: marquee.width,
+                height: marquee.height,
+              }}
+            />
+          )}
         </div>
         <div className="monitor-strip">
           <span className={canStart ? 'ok' : ''}>● Signal</span>
@@ -172,226 +222,282 @@ export function PreflightScreen() {
       </div>
 
       {/* channel-strip rail */}
-      <aside className="flex flex-col gap-3">
-        <Module title="Program" no="CH·01">
-          <Segmented
-            ariaLabel="Layout"
-            value={settings.layout}
-            onChange={(layout) => patchSettings({ layout })}
-            options={[
-              { value: 'screen+camera', label: 'Scrn+Cam' },
-              { value: 'screen', label: 'Screen' },
-              { value: 'camera', label: 'Camera' },
-            ]}
-          />
-        </Module>
-
-        {settings.layout !== 'screen' && (
-          <Module title="Camera" no="CH·02">
-            <SelectField
-              ariaLabel="Camera"
-              value={settings.camId ?? ''}
-              onChange={(camId) => patchSettings({ camId: camId || null })}
+      <div className="config-panel">
+        <div className="rail-col">
+          <Module title="Program" no="CH·01">
+            <Segmented
+              ariaLabel="Layout"
+              value={settings.layout}
+              onChange={(layout) => patchSettings({ layout })}
               options={[
-                { value: '', label: 'Default camera' },
-                ...devices.cams.map((d) => ({ value: d.deviceId, label: d.label || 'Camera' })),
+                { value: 'screen+camera', label: 'Scrn+Cam' },
+                { value: 'screen', label: 'Screen' },
+                { value: 'camera', label: 'Camera' },
               ]}
             />
-            <div className="mt-3">
-              <Fader
-                label="Zoom · head framing"
-                value={settings.bubble.zoom}
-                min={ZOOM_MIN}
-                max={ZOOM_MAX}
-                step={0.05}
-                onChange={(zoom) => updateBubble({ zoom })}
-                format={(v) => `${v.toFixed(2)}×`}
+          </Module>
+
+          {settings.layout !== 'screen' && (
+            <Module title="Camera" no="CH·02">
+              <SelectField
+                ariaLabel="Camera"
+                value={settings.camId ?? ''}
+                onChange={(camId) => patchSettings({ camId: camId || null })}
+                options={[
+                  { value: '', label: 'Default camera' },
+                  ...devices.cams.map((d) => ({ value: d.deviceId, label: d.label || 'Camera' })),
+                ]}
               />
-            </div>
-            {settings.layout === 'screen+camera' && (
+              <div className="mt-3">
+                <Fader
+                  label="Zoom · head framing"
+                  value={settings.bubble.zoom}
+                  min={ZOOM_MIN}
+                  max={ZOOM_MAX}
+                  step={0.05}
+                  onChange={(zoom) => updateBubble({ zoom })}
+                  format={(v) => `${v.toFixed(2)}×`}
+                />
+              </div>
+              {settings.layout === 'screen+camera' && (
+                <>
+                  <div className="mt-2">
+                    <Fader
+                      label="Bubble size"
+                      value={settings.bubble.size}
+                      min={BUBBLE_MIN_SIZE}
+                      max={BUBBLE_MAX_SIZE}
+                      step={0.01}
+                      onChange={(size) => updateBubble({ size })}
+                      format={(v) => `${Math.round(v * 100)}%`}
+                    />
+                  </div>
+                  <div className="mt-3">
+                    <Segmented
+                      ariaLabel="Bubble shape"
+                      value={settings.bubble.shape}
+                      onChange={(shape) => patchBubble({ shape })}
+                      options={[
+                        { value: 'circle', label: 'Circle' },
+                        { value: 'roundedRect', label: 'Rounded' },
+                      ]}
+                    />
+                  </div>
+                </>
+              )}
+              <div className="sw-row mt-4 px-2">
+                <Switch
+                  checked={settings.bubble.mirror}
+                  onChange={(mirror) => patchBubble({ mirror })}
+                  label="Mirror"
+                />
+                <Switch
+                  checked={settings.bubble.border}
+                  onChange={(border) => patchBubble({ border })}
+                  label="Border"
+                />
+                <Switch
+                  checked={settings.bubble.shadow}
+                  onChange={(shadow) => patchBubble({ shadow })}
+                  label="Shadow"
+                />
+              </div>
+            </Module>
+          )}
+
+          <Module
+            title="Mic"
+            no="CH·03"
+            val={
+              <Switch
+                horizontal
+                checked={settings.micEnabled}
+                onChange={(micEnabled) => patchSettings({ micEnabled })}
+                label="Microphone on"
+              />
+            }
+          >
+            {settings.micEnabled && (
               <>
-                <div className="mt-2">
-                  <Fader
-                    label="Bubble size"
-                    value={settings.bubble.size}
-                    min={BUBBLE_MIN_SIZE}
-                    max={BUBBLE_MAX_SIZE}
-                    step={0.01}
-                    onChange={(size) => updateBubble({ size })}
-                    format={(v) => `${Math.round(v * 100)}%`}
-                  />
-                </div>
+                <SelectField
+                  ariaLabel="Microphone"
+                  value={settings.micId ?? ''}
+                  onChange={(micId) => patchSettings({ micId: micId || null })}
+                  options={[
+                    { value: '', label: 'Default microphone' },
+                    ...devices.mics.map((d) => ({
+                      value: d.deviceId,
+                      label: d.label || 'Microphone',
+                    })),
+                  ]}
+                />
                 <div className="mt-3">
-                  <Segmented
-                    ariaLabel="Bubble shape"
-                    value={settings.bubble.shape}
-                    onChange={(shape) => patchBubble({ shape })}
-                    options={[
-                      { value: 'circle', label: 'Circle' },
-                      { value: 'roundedRect', label: 'Rounded' },
-                    ]}
+                  <VuMeter level={micLevel} />
+                  <div className="vu-cap">
+                    <span>−60</span>
+                    <span>−24</span>
+                    <span>−12</span>
+                    <span>0</span>
+                  </div>
+                </div>
+                <div className="sw-row mt-4 px-2">
+                  <Switch
+                    checked={settings.micProcessing.noiseSuppression}
+                    onChange={(v) =>
+                      patchSettings({
+                        micProcessing: { ...settings.micProcessing, noiseSuppression: v },
+                      })
+                    }
+                    label="Denoise"
+                  />
+                  <Switch
+                    checked={settings.micProcessing.echoCancellation}
+                    onChange={(v) =>
+                      patchSettings({
+                        micProcessing: { ...settings.micProcessing, echoCancellation: v },
+                      })
+                    }
+                    label="Echo"
+                  />
+                  <Switch
+                    checked={settings.micProcessing.autoGainControl}
+                    onChange={(v) =>
+                      patchSettings({
+                        micProcessing: { ...settings.micProcessing, autoGainControl: v },
+                      })
+                    }
+                    label="Gain"
                   />
                 </div>
               </>
             )}
-            <div className="sw-row mt-4 px-2">
-              <Switch
-                checked={settings.bubble.mirror}
-                onChange={(mirror) => patchBubble({ mirror })}
-                label="Mirror"
-              />
-              <Switch
-                checked={settings.bubble.border}
-                onChange={(border) => patchBubble({ border })}
-                label="Border"
-              />
-              <Switch
-                checked={settings.bubble.shadow}
-                onChange={(shadow) => patchBubble({ shadow })}
-                label="Shadow"
-              />
-            </div>
           </Module>
-        )}
+        </div>
 
-        <Module
-          title="Mic"
-          no="CH·03"
-          val={
-            <Switch
-              horizontal
-              checked={settings.micEnabled}
-              onChange={(micEnabled) => patchSettings({ micEnabled })}
-              label="Microphone on"
+        <div className="rail-col">
+          <Module title="Tape" no="OUT">
+            <SelectField
+              ariaLabel="Quality preset"
+              mono
+              value={settings.presetId}
+              onChange={(presetId) => patchSettings({ presetId: presetId as PresetId })}
+              options={Object.values(PRESETS).map((p) => ({ value: p.id, label: p.label }))}
             />
-          }
-        >
-          {settings.micEnabled && (
-            <>
-              <SelectField
-                ariaLabel="Microphone"
-                value={settings.micId ?? ''}
-                onChange={(micId) => patchSettings({ micId: micId || null })}
-                options={[
-                  { value: '', label: 'Default microphone' },
-                  ...devices.mics.map((d) => ({ value: d.deviceId, label: d.label || 'Microphone' })),
-                ]}
-              />
-              <div className="mt-3">
-                <VuMeter level={micLevel} />
-                <div className="vu-cap">
-                  <span>−60</span>
-                  <span>−24</span>
-                  <span>−12</span>
-                  <span>0</span>
-                </div>
-              </div>
-              <div className="sw-row mt-4 px-2">
-                <Switch
-                  checked={settings.micProcessing.noiseSuppression}
-                  onChange={(v) =>
-                    patchSettings({ micProcessing: { ...settings.micProcessing, noiseSuppression: v } })
-                  }
-                  label="Denoise"
-                />
-                <Switch
-                  checked={settings.micProcessing.echoCancellation}
-                  onChange={(v) =>
-                    patchSettings({ micProcessing: { ...settings.micProcessing, echoCancellation: v } })
-                  }
-                  label="Echo"
-                />
-                <Switch
-                  checked={settings.micProcessing.autoGainControl}
-                  onChange={(v) =>
-                    patchSettings({ micProcessing: { ...settings.micProcessing, autoGainControl: v } })
-                  }
-                  label="Gain"
-                />
-              </div>
-            </>
-          )}
-        </Module>
-
-        <Module title="Tape" no="OUT">
-          <SelectField
-            ariaLabel="Quality preset"
-            mono
-            value={settings.presetId}
-            onChange={(presetId) => patchSettings({ presetId: presetId as PresetId })}
-            options={Object.values(PRESETS).map((p) => ({ value: p.id, label: p.label }))}
-          />
-          {settings.layout !== 'camera' && (
-            <>
-              <div className="ctl-row mt-4">
-                <span className="ctl-name">Capture tab / system audio</span>
-                <Switch
-                  horizontal
-                  checked={settings.captureSystemAudio}
-                  onChange={(captureSystemAudio) => {
-                    patchSettings({ captureSystemAudio });
-                    if (useStore.getState().session.screenReady) {
-                      toast('Audio capture applies the next time you select a screen.');
-                    }
-                  }}
-                  label="Capture tab or system audio"
-                />
-              </div>
-              {settings.captureSystemAudio && (
-                <div className="ctl-row mt-2">
-                  <span className="ctl-name">Mute locally on roll</span>
+            {settings.layout !== 'camera' && (
+              <>
+                <div className="ctl-row mt-4">
+                  <span className="ctl-name">Capture tab / system audio</span>
                   <Switch
                     horizontal
-                    checked={settings.suppressLocalAudioPlayback}
-                    onChange={(suppressLocalAudioPlayback) =>
-                      patchSettings({ suppressLocalAudioPlayback })
-                    }
-                    label="Mute locally while recording"
+                    checked={settings.captureSystemAudio}
+                    onChange={(captureSystemAudio) => {
+                      patchSettings({ captureSystemAudio });
+                      if (useStore.getState().session.screenReady) {
+                        toast('Audio capture applies the next time you select a screen.');
+                      }
+                    }}
+                    label="Capture tab or system audio"
                   />
                 </div>
-              )}
-            </>
-          )}
-        </Module>
+                {settings.captureSystemAudio && (
+                  <div className="ctl-row mt-2">
+                    <span className="ctl-name">Mute locally on roll</span>
+                    <Switch
+                      horizontal
+                      checked={settings.suppressLocalAudioPlayback}
+                      onChange={(suppressLocalAudioPlayback) =>
+                        patchSettings({ suppressLocalAudioPlayback })
+                      }
+                      label="Mute locally while recording"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </Module>
 
-        <Module title="Scene" no="CH·04">
-          <BackdropPicker
-            value={settings.frame.backdrop}
-            onChange={(backdrop) => updateFrame({ backdrop })}
-          />
-          <div className="mt-3">
-            <Fader
-              label="Padding"
-              value={settings.frame.pad}
-              min={0}
-              max={PAD_MAX}
-              step={0.005}
-              onChange={(pad) => updateFrame({ pad })}
-              format={(v) => `${Math.round(v * 100)}%`}
+          <Module title="Scene" no="CH·04">
+            <BackdropPicker
+              value={settings.frame.backdrop}
+              onChange={(backdrop) => updateFrame({ backdrop })}
             />
-          </div>
-          <div className="mt-2">
-            <Fader
-              label="Corner radius"
-              value={settings.frame.radius}
-              min={0}
-              max={RADIUS_MAX}
-              step={1}
-              onChange={(radius) => updateFrame({ radius })}
-              format={(v) => `${Math.round(v)} px`}
+            <div className="mt-3">
+              <Fader
+                label="Padding"
+                value={settings.frame.pad}
+                min={0}
+                max={PAD_MAX}
+                step={0.005}
+                onChange={(pad) => updateFrame({ pad })}
+                format={(v) => `${Math.round(v * 100)}%`}
+              />
+            </div>
+            <div className="mt-2">
+              <Fader
+                label="Corner radius"
+                value={settings.frame.radius}
+                min={0}
+                max={RADIUS_MAX}
+                step={1}
+                onChange={(radius) => updateFrame({ radius })}
+                format={(v) => `${Math.round(v)} px`}
+              />
+            </div>
+            <div className="ctl-row mt-4">
+              <span className="ctl-name">Drop shadow</span>
+              <Switch
+                horizontal
+                checked={settings.frame.shadow}
+                onChange={(shadow) => updateFrame({ shadow })}
+                label="Drop shadow"
+              />
+            </div>
+            <p className="mod-hint">Padding trades screen pixels for style.</p>
+          </Module>
+
+          <Module title="Focus" no="CH·05">
+            <Segmented
+              ariaLabel="Focus"
+              value={tool}
+              onChange={selectFocusTool}
+              options={[
+                { value: 'off', label: 'Off' },
+                { value: 'zoom', label: 'Punch' },
+                { value: 'spotlight', label: 'Spot' },
+              ]}
             />
-          </div>
-          <div className="ctl-row mt-4">
-            <span className="ctl-name">Drop shadow</span>
-            <Switch
-              horizontal
-              checked={settings.frame.shadow}
-              onChange={(shadow) => updateFrame({ shadow })}
-              label="Drop shadow"
-            />
-          </div>
-          <p className="mod-hint">Padding trades screen pixels for style.</p>
-        </Module>
+            <div className="mt-3">
+              <Fader
+                label="Screen zoom"
+                value={focus.mode === 'zoom' ? focusZoomFactor(focus) : 1}
+                min={1}
+                max={FOCUS_ZOOM_MAX}
+                step={0.1}
+                onChange={(z) => punchPreset(z)}
+                format={(v) => `${v.toFixed(1)}×`}
+              />
+            </div>
+            <div className="sw-row mt-4 px-2">
+              <button type="button" className="btn-s" onClick={() => punchPreset(1.5)}>
+                1.5×
+              </button>
+              <button type="button" className="btn-s" onClick={() => punchPreset(2)}>
+                2×
+              </button>
+              <button
+                type="button"
+                className="btn-s"
+                onClick={() => {
+                  setTool('off');
+                  resetFocus();
+                }}
+              >
+                ⟲ 1×
+              </button>
+            </div>
+            <p className="mod-hint">Drag on the monitor to target a region. 0 or Esc to exit.</p>
+          </Module>
+        </div>
 
         <div className="rec-mod">
           <button
@@ -412,7 +518,7 @@ export function PreflightScreen() {
             </div>
           </div>
         </div>
-      </aside>
+      </div>
 
       <video ref={camVideoRef} muted playsInline className="hidden" />
       <video ref={screenVideoRef} muted playsInline className="hidden" />
@@ -450,6 +556,10 @@ function makeScreenPlaceholder(): HTMLCanvasElement {
   ctx.fillText(title, STAGE_W / 2, STAGE_H / 2 - 10);
   ctx.fillStyle = '#363129';
   ctx.font = '13px "IBM Plex Mono", monospace';
-  ctx.fillText('· HIT “SELECT SCREEN” — TAB / WINDOW / ENTIRE SCREEN ·', STAGE_W / 2, STAGE_H / 2 + 26);
+  ctx.fillText(
+    '· HIT “SELECT SCREEN” — TAB / WINDOW / ENTIRE SCREEN ·',
+    STAGE_W / 2,
+    STAGE_H / 2 + 26,
+  );
   return canvas;
 }

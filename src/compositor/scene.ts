@@ -1,5 +1,13 @@
-import type { BubbleGeometry, FrameSettings, LayoutKind } from '../types';
-import { bubbleRectPx, cameraSrcRect, containRect, frameRadiusPx, screenFrameRect } from './layout';
+import type { BubbleGeometry, FrameSettings, LayoutKind, ScreenFocus } from '../types';
+import {
+  bubbleRectPx,
+  cameraSrcRect,
+  containRect,
+  frameRadiusPx,
+  screenFrameRect,
+  screenSrcRect,
+  SPOTLIGHT_DIM,
+} from './layout';
 import type { Box } from './layout';
 import { paintBackdrop } from './backdrops';
 
@@ -16,6 +24,7 @@ export interface SceneState {
   layout: LayoutKind;
   bubble: BubbleGeometry;
   frame: FrameSettings;
+  focus: ScreenFocus;
   screen: DrawSource | null;
   camera: DrawSource | null;
 }
@@ -36,7 +45,7 @@ const CARD_WELL = '#0a0908';
  * reproduces the original full-bleed output.
  */
 export function drawScene(ctx: Ctx2D, state: SceneState): void {
-  const { outW, outH, layout, bubble, frame, screen, camera } = state;
+  const { outW, outH, layout, bubble, frame, focus, screen, camera } = state;
 
   paintBackdrop(ctx, frame.backdrop, outW, outH, screen);
 
@@ -49,7 +58,7 @@ export function drawScene(ctx: Ctx2D, state: SceneState): void {
   }
 
   if (screen) {
-    drawFramedScreen(ctx, screen, box, radius, frame.shadow, outH);
+    drawFramedScreen(ctx, screen, box, radius, frame.shadow, outH, focus);
   }
 
   if (layout === 'screen+camera' && camera && bubble.visible) {
@@ -81,6 +90,7 @@ function drawFramedScreen(
   radius: number,
   shadow: boolean,
   outH: number,
+  focus: ScreenFocus,
 ): void {
   if (shadow) drawCardShadow(ctx, box, radius, outH);
   ctx.save();
@@ -89,7 +99,36 @@ function drawFramedScreen(
   ctx.fillStyle = CARD_WELL;
   ctx.fillRect(box.x, box.y, box.w, box.h);
   const dst = containRect(screen.w, screen.h, box.w, box.h);
-  ctx.drawImage(screen.img, box.x + dst.x, box.y + dst.y, dst.w, dst.h);
+  const dx = box.x + dst.x;
+  const dy = box.y + dst.y;
+  if (focus.mode === 'zoom') {
+    // Crop the source to the focus region and stretch it onto the same dst the
+    // screen fills at 1x — a punch-in that resamples from native-res pixels.
+    const src = screenSrcRect(focus, screen.w, screen.h);
+    ctx.drawImage(screen.img, src.sx, src.sy, src.sw, src.sh, dx, dy, dst.w, dst.h);
+  } else {
+    ctx.drawImage(screen.img, dx, dy, dst.w, dst.h);
+    if (focus.mode === 'spotlight') {
+      drawSpotlight(ctx, box, {
+        x: dx + (focus.cx - focus.w / 2) * dst.w,
+        y: dy + (focus.cy - focus.h / 2) * dst.h,
+        w: focus.w * dst.w,
+        h: focus.h * dst.h,
+      });
+    }
+  }
+  ctx.restore();
+}
+
+/** Dims the framed card outside a bright region, to point without zooming. */
+function drawSpotlight(ctx: Ctx2D, box: Box, region: Box): void {
+  const r = Math.min(region.w, region.h) * 0.04;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(box.x, box.y, box.w, box.h);
+  ctx.roundRect(region.x, region.y, region.w, region.h, r);
+  ctx.fillStyle = `rgba(0, 0, 0, ${SPOTLIGHT_DIM})`;
+  ctx.fill('evenodd');
   ctx.restore();
 }
 

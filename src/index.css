@@ -966,6 +966,54 @@ input[type='range'].trim-range:focus-visible::-webkit-slider-thumb {
   gap: 8px;
 }
 
+/* ---------------- preflight layout ---------------- */
+/* Monitor on the left (large, pinned), the channel-strip modules in two columns
+   on the right so nothing scrolls the monitor out of view while you adjust it. */
+.preflight-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 680px;
+  gap: 20px;
+  align-items: start;
+}
+.preflight-grid .monitor {
+  position: sticky;
+  top: 16px;
+}
+.config-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-content: start;
+}
+.config-panel .rec-mod {
+  grid-column: 1 / -1;
+}
+.rail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+/* 13-inch laptops / iPad landscape: collapse to one rail (it may scroll, but the
+   monitor stays pinned). */
+@media (max-width: 1399px) {
+  .preflight-grid {
+    grid-template-columns: minmax(0, 1fr) 336px;
+  }
+  .config-panel {
+    grid-template-columns: 1fr;
+  }
+}
+/* Narrow: stack the monitor above the controls. */
+@media (max-width: 1023px) {
+  .preflight-grid {
+    grid-template-columns: 1fr;
+  }
+  .preflight-grid .monitor {
+    position: static;
+  }
+}
+
 /* ---------------- monitor shell + stage ---------------- */
 .monitor {
   background: var(--grad-module);
@@ -1178,6 +1226,42 @@ input[type='range'].trim-range:focus-visible::-webkit-slider-thumb {
 .snap:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
+}
+
+/* ---------------- focus (live zoom / spotlight) ---------------- */
+.focus-marquee {
+  position: absolute;
+  z-index: 6;
+  border: 1.5px solid var(--color-accent);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  pointer-events: none;
+  /* Dims the rest of the stage so drawing the box previews the focus region. */
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.3);
+}
+.focus-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 8px;
+  border-radius: var(--radius-2);
+  background: var(--surface-slot);
+  box-shadow: var(--shadow-slot);
+}
+.focus-strip.active {
+  box-shadow: var(--shadow-slot), 0 0 0 1px var(--color-accent-dim);
+}
+.focus-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.focus-read {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
 }
 .deck-foot {
   display: flex;

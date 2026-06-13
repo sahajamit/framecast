@@ -5,7 +5,7 @@ import {
   Output,
   StreamTarget,
 } from 'mediabunny';
-import type { BubbleGeometry, FrameSettings, LayoutKind, QualityPreset } from '../types';
+import type { BubbleGeometry, FrameSettings, LayoutKind, QualityPreset, ScreenFocus } from '../types';
 import type { FromCompositor, ToCompositor } from '../compositor/protocol';
 import type { AudioGraph } from '../audio/audioGraph';
 import { AUDIO_BITRATE, assertVideoEncodable, outputDims } from './encoderConfig';
@@ -20,6 +20,7 @@ export interface SessionConfig {
   preset: QualityPreset;
   bubble: BubbleGeometry;
   frame: FrameSettings;
+  focus: ScreenFocus;
   audioCodec: 'aac' | 'opus' | null;
   libraryDir: FileSystemDirectoryHandle;
 }
@@ -45,6 +46,7 @@ export interface ActiveSession {
   resume(): void;
   setBubble(bubble: BubbleGeometry): void;
   setFrame(frame: FrameSettings): void;
+  setFocus(focus: ScreenFocus, animate: boolean): void;
   stop(): Promise<{ fileName: string; handle: FileSystemFileHandle }>;
   /** Tear down and delete the part file (error/cancel path). */
   abort(): Promise<void>;
@@ -100,6 +102,7 @@ export async function prepareSession(
     layout: cfg.layout,
     bubble: cfg.bubble,
     frame: cfg.frame,
+    focus: cfg.focus,
     screen: screenReadable,
     camera: cameraReadable,
     out: generator.writable,
@@ -169,6 +172,10 @@ export async function prepareSession(
 
     setFrame(frame: FrameSettings) {
       worker.postMessage({ type: 'frame', frame } satisfies ToCompositor);
+    },
+
+    setFocus(focus: ScreenFocus, animate: boolean) {
+      worker.postMessage({ type: 'focus', focus, animate } satisfies ToCompositor);
     },
 
     async stop() {

@@ -4,7 +4,9 @@
  * and the PiP deck call into the same instance.
  */
 import { useStore } from '../state/store';
-import type { BubbleGeometry, FrameSettings } from '../types';
+import type { BubbleGeometry, FrameSettings, ScreenFocus } from '../types';
+import { DEFAULT_FOCUS } from '../compositor/layout';
+import { prefersReducedMotion } from '../ui/reducedMotion';
 import { runtime } from '../recorder/runtime';
 import { prepareSession } from '../recorder/recordingSession';
 import { PRESETS, probeAudioCodec } from '../recorder/encoderConfig';
@@ -279,7 +281,7 @@ export async function startFlow(): Promise<void> {
   }
 
   if (!isE2E() && pipSupported()) {
-    const pip = await openPipWindow(380, 470);
+    const pip = await openPipWindow(380, 520);
     if (pip) adoptPipWindow(pip);
   }
   await beginRecording();
@@ -288,6 +290,8 @@ export async function startFlow(): Promise<void> {
 async function beginRecording(): Promise<void> {
   const { settings } = store();
   const layout = settings.layout;
+  // Every take starts at full frame — a preflight rehearsal punch never leaks in.
+  store().patchScreenFocus(DEFAULT_FOCUS);
 
   try {
     // Countdown FIRST, pipeline after. A constructed-but-not-started session
@@ -332,6 +336,7 @@ async function beginRecording(): Promise<void> {
         preset: PRESETS[settings.presetId],
         bubble: settings.bubble,
         frame: settings.frame,
+        focus: store().focus,
         audioCodec: settings.micEnabled || displayAudioTrack ? store().devices.audioCodec : null,
         libraryDir: runtime.libraryDir!,
       },
@@ -392,6 +397,18 @@ export function updateFrame(patch: Partial<FrameSettings>): void {
   runtime.session?.setFrame(store().settings.frame);
 }
 
+/** Sets the live screen punch-in / spotlight (glides unless reduced-motion). */
+export function updateFocus(patch: Partial<ScreenFocus>, opts?: { animate?: boolean }): void {
+  store().patchScreenFocus(patch);
+  const animate = opts?.animate ?? !prefersReducedMotion();
+  runtime.session?.setFocus(store().focus, animate);
+}
+
+/** Pull back to the full frame (Escape / 0 / the reset control). */
+export function resetFocus(): void {
+  updateFocus({ mode: 'none', cx: 0.5, cy: 0.5, w: 1, h: 1 });
+}
+
 export async function stopRecording(): Promise<void> {
   const phase = store().session.phase;
   if (phase !== 'recording' && phase !== 'paused') return;
@@ -433,6 +450,7 @@ function cleanupAfterSession(): void {
   runtime.session = null;
   stopStream(runtime.displayStream);
   runtime.displayStream = null;
+  store().patchScreenFocus(DEFAULT_FOCUS);
   store().patchSession({ screenReady: false, screenInfo: null });
   runtime.audioGraph?.attachDisplayAudio(null);
   runtime.audioGraph?.setMicMuted(false);
@@ -454,7 +472,7 @@ function adoptPipWindow(pip: Window): void {
 
 export async function reopenPip(): Promise<void> {
   if (runtime.pipWindow || !pipSupported() || isE2E()) return;
-  const pip = await openPipWindow(380, 470);
+  const pip = await openPipWindow(380, 520);
   if (pip) adoptPipWindow(pip);
 }
 

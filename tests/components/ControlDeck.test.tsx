@@ -10,6 +10,8 @@ vi.mock('../../src/app/controller', () => ({
   stopRecording: (...args: unknown[]) => stopRecording(...args),
   togglePause: (...args: unknown[]) => togglePause(...args),
   updateBubble: vi.fn(),
+  updateFocus: vi.fn(),
+  resetFocus: vi.fn(),
 }));
 
 import { ControlDeck } from '../../src/pip/ControlDeck';
@@ -46,6 +48,15 @@ describe('ControlDeck transport', () => {
     useStore.getState().patchSession({ phase: 'recording' });
     render(<ControlDeck windowRef={window} />);
     expect(screen.queryByText(/^zoom$/i)).not.toBeInTheDocument();
+    useStore.getState().patchSettings({ layout: 'screen+camera' });
+  });
+
+  it('shows the Focus strip even in screen-only layout (not gated on the bubble)', () => {
+    useStore.getState().patchSettings({ layout: 'screen' });
+    useStore.getState().patchSession({ phase: 'recording' });
+    render(<ControlDeck windowRef={window} />);
+    expect(screen.getByRole('group', { name: /focus/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /punch/i })).toBeInTheDocument();
     useStore.getState().patchSettings({ layout: 'screen+camera' });
   });
 });
