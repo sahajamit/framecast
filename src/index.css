@@ -430,6 +430,72 @@ body::after {
   vertical-align: 2px;
 }
 
+/* ---------------- scene backdrops ---------------- */
+.scene-swatches {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-2);
+}
+.swatch {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.swatch canvas {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  display: block;
+  border-radius: var(--radius-1);
+  box-shadow: var(--shadow-slot), inset 0 0 0 1px var(--color-line);
+  transition: box-shadow var(--t-ui) var(--ease-out), transform var(--t-tap) var(--ease-out);
+}
+.swatch:hover canvas {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-slot), inset 0 0 0 1px var(--color-line-strong);
+}
+.swatch.on canvas {
+  box-shadow: 0 0 0 2px var(--color-accent), 0 0 12px -2px var(--color-accent-dim);
+}
+.swatch.is-none canvas {
+  outline: 1px dashed var(--color-line-strong);
+  outline-offset: -4px;
+}
+.swatch:focus-visible {
+  outline: none;
+}
+.swatch:focus-visible canvas {
+  box-shadow: var(--focus-ring);
+}
+.swatch-cap {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.swatch.on .swatch-cap {
+  color: var(--color-ink-2);
+}
+.mod-hint {
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  color: var(--color-ink-3);
+}
+
 /* ---------------- select (native, slot-styled) ---------------- */
 .select-wrap {
   position: relative;

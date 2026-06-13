@@ -10,10 +10,20 @@ import {
   syncMic,
   toast,
   updateBubble,
+  updateFrame,
 } from './controller';
 import { drawScene } from '../compositor/scene';
-import { BUBBLE_MAX_SIZE, BUBBLE_MIN_SIZE, ZOOM_MAX, ZOOM_MIN } from '../compositor/layout';
+import {
+  BUBBLE_MAX_SIZE,
+  BUBBLE_MIN_SIZE,
+  PAD_MAX,
+  RADIUS_MAX,
+  screenFrameRect,
+  ZOOM_MAX,
+  ZOOM_MIN,
+} from '../compositor/layout';
 import { Fader, Module, Segmented, SelectField, Switch, Timecode, VuMeter } from '../ui/controls';
+import { BackdropPicker } from '../ui/BackdropPicker';
 import { useBubbleDrag } from '../ui/useBubbleDrag';
 import { meterPosition, readLevel } from '../audio/levelMeter';
 import { PRESETS } from '../recorder/encoderConfig';
@@ -77,6 +87,7 @@ export function PreflightScreen() {
         outH: STAGE_H,
         layout: s.layout,
         bubble: s.bubble,
+        frame: s.frame,
         screen: screenLive
           ? { img: screenLive, w: screenLive.videoWidth, h: screenLive.videoHeight }
           : { img: placeholder, w: STAGE_W, h: STAGE_H },
@@ -99,6 +110,12 @@ export function PreflightScreen() {
   const { handlers, cursor } = useBubbleDrag(
     () => ({ w: STAGE_W, h: STAGE_H }),
     settings.layout === 'screen+camera',
+    () => {
+      const f = useStore.getState().settings.frame;
+      // Snap to the screen frame (so the bubble can straddle the border) only
+      // when framing is on; otherwise keep the canvas-corner snap.
+      return f.backdrop !== 'none' || f.pad > 0 ? screenFrameRect(f.pad, STAGE_W, STAGE_H) : undefined;
+    },
   );
 
   const needsScreen = settings.layout !== 'camera';
@@ -335,6 +352,45 @@ export function PreflightScreen() {
               )}
             </>
           )}
+        </Module>
+
+        <Module title="Scene" no="CH·04">
+          <BackdropPicker
+            value={settings.frame.backdrop}
+            onChange={(backdrop) => updateFrame({ backdrop })}
+          />
+          <div className="mt-3">
+            <Fader
+              label="Padding"
+              value={settings.frame.pad}
+              min={0}
+              max={PAD_MAX}
+              step={0.005}
+              onChange={(pad) => updateFrame({ pad })}
+              format={(v) => `${Math.round(v * 100)}%`}
+            />
+          </div>
+          <div className="mt-2">
+            <Fader
+              label="Corner radius"
+              value={settings.frame.radius}
+              min={0}
+              max={RADIUS_MAX}
+              step={1}
+              onChange={(radius) => updateFrame({ radius })}
+              format={(v) => `${Math.round(v)} px`}
+            />
+          </div>
+          <div className="ctl-row mt-4">
+            <span className="ctl-name">Drop shadow</span>
+            <Switch
+              horizontal
+              checked={settings.frame.shadow}
+              onChange={(shadow) => updateFrame({ shadow })}
+              label="Drop shadow"
+            />
+          </div>
+          <p className="mod-hint">Padding trades screen pixels for style.</p>
         </Module>
 
         <div className="rec-mod">

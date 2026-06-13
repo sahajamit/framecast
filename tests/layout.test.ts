@@ -7,7 +7,10 @@ import {
   containRect,
   cornerPosition,
   DEFAULT_BUBBLE,
+  frameRadiusPx,
   hitTest,
+  PAD_MAX,
+  screenFrameRect,
   snapTarget,
 } from '../src/compositor/layout';
 import type { BubbleGeometry } from '../src/types';
@@ -128,5 +131,64 @@ describe('containRect', () => {
     expect(r.w).toBeCloseTo(1000);
     expect(r.h).toBeCloseTo(562.5);
     expect(r.y).toBeCloseTo((1000 - 562.5) / 2);
+  });
+});
+
+describe('screenFrameRect', () => {
+  it('insets by an equal pixel border on all sides (fraction of height)', () => {
+    const box = screenFrameRect(0.05, OUT_W, OUT_H);
+    const inset = 0.05 * OUT_H; // 72
+    expect(box.x).toBeCloseTo(inset);
+    expect(box.y).toBeCloseTo(inset);
+    expect(box.w).toBeCloseTo(OUT_W - inset * 2);
+    expect(box.h).toBeCloseTo(OUT_H - inset * 2);
+  });
+
+  it('is the full canvas at pad 0 (the raw, byte-identical case)', () => {
+    const box = screenFrameRect(0, OUT_W, OUT_H);
+    expect(box).toEqual({ x: 0, y: 0, w: OUT_W, h: OUT_H });
+  });
+
+  it('clamps padding to PAD_MAX', () => {
+    const box = screenFrameRect(1, OUT_W, OUT_H);
+    const inset = PAD_MAX * OUT_H;
+    expect(box.x).toBeCloseTo(inset);
+  });
+});
+
+describe('frameRadiusPx', () => {
+  it('scales the 1080p-reference radius by output height', () => {
+    expect(frameRadiusPx(12, 1080)).toBeCloseTo(12);
+    expect(frameRadiusPx(12, 2160)).toBeCloseTo(24);
+    expect(frameRadiusPx(12, 540)).toBeCloseTo(6);
+  });
+});
+
+describe('frame-relative snapping', () => {
+  const frame = screenFrameRect(0.05, OUT_W, OUT_H);
+
+  it('snaps the bubble onto the screen-frame corner so it straddles the border', () => {
+    const b = bubble({ size: 0.24 });
+    const d = 0.24 * Math.min(OUT_W, OUT_H);
+    const framed = cornerPosition('bottom-right', b, OUT_W, OUT_H, frame);
+    const canvas = cornerPosition('bottom-right', b, OUT_W, OUT_H);
+    // The framed anchor sits further toward the edge than the canvas-inset one.
+    expect(framed.cx).toBeGreaterThan(canvas.cx);
+    expect(framed.cy).toBeGreaterThan(canvas.cy);
+    // The bubble extends past the screen-frame edge (overlap onto the backdrop)…
+    expect(framed.cx * OUT_W + d / 2).toBeGreaterThan(frame.x + frame.w);
+    // …but stays on canvas.
+    expect(framed.cx * OUT_W + d / 2).toBeLessThanOrEqual(OUT_W + 1e-6);
+    expect(framed.cy * OUT_H + d / 2).toBeLessThanOrEqual(OUT_H + 1e-6);
+  });
+
+  it('snapTarget uses the frame anchors when a frame is passed', () => {
+    const b = bubble({ size: 0.24 });
+    const anchor = cornerPosition('bottom-right', b, OUT_W, OUT_H, frame);
+    const near = bubble({ size: 0.24, cx: anchor.cx - 0.005, cy: anchor.cy - 0.005 });
+    const snapped = snapTarget(near, OUT_W, OUT_H, frame);
+    expect(snapped?.corner).toBe('bottom-right');
+    expect(snapped?.cx).toBeCloseTo(anchor.cx);
+    expect(snapped?.cy).toBeCloseTo(anchor.cy);
   });
 });

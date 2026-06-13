@@ -23,6 +23,38 @@ export interface BubbleGeometry {
   visible: boolean;
 }
 
+/**
+ * Backdrop behind the inset screen in scene framing. Drawn as code (gradients /
+ * noise / live blur) in `compositor/backdrops.ts`, never as bundled images, and
+ * theme-invariant — backdrops are part of the recording, not the app chrome.
+ */
+export type BackdropId =
+  | 'none'
+  | 'ink'
+  | 'slate'
+  | 'bone'
+  | 'charcoal'
+  | 'paper'
+  | 'led'
+  | 'charcoal-grain'
+  | 'paper-grain'
+  | 'blur';
+
+/**
+ * Scene framing: the captured screen sits inset on a styled backdrop with
+ * rounded corners and a soft shadow. Resolution-independent so the 720p
+ * preflight preview and the full-res recording render the same relative frame:
+ * `pad` is a fraction; `radius` is px at a 1080p reference, scaled by outH/1080.
+ */
+export interface FrameSettings {
+  backdrop: BackdropId;
+  /** Inset as a fraction of output height (0..0.12), applied as equal px on all sides. */
+  pad: number;
+  /** Corner radius in px at a 1080p-height reference (0..24); drawn = radius * outH / 1080. */
+  radius: number;
+  shadow: boolean;
+}
+
 export type PresetId = '1080p30' | '1080p60' | '1440p30' | '1440p60' | '2160p30';
 
 export interface QualityPreset {

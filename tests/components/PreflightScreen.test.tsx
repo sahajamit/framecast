@@ -14,6 +14,7 @@ vi.mock('../../src/app/controller', () => ({
   syncMic: vi.fn(),
   toast: vi.fn(),
   updateBubble: vi.fn(),
+  updateFrame: vi.fn(),
 }));
 
 import { PreflightScreen } from '../../src/app/PreflightScreen';
@@ -53,5 +54,14 @@ describe('PreflightScreen gating', () => {
     // No camera stream in jsdom -> still disabled, with the waiting hint.
     expect(screen.getByRole('button', { name: /roll tape/i })).toBeDisabled();
     expect(screen.getByText(/waiting for the camera/i)).toBeInTheDocument();
+  });
+
+  it('renders the Scene framing module with its controls', () => {
+    render(<PreflightScreen />);
+    expect(screen.getByText('Scene')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /backdrop/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Padding')).toBeInTheDocument();
+    expect(screen.getByLabelText('Corner radius')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /drop shadow/i })).toBeInTheDocument();
   });
 });

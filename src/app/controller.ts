@@ -4,7 +4,7 @@
  * and the PiP deck call into the same instance.
  */
 import { useStore } from '../state/store';
-import type { BubbleGeometry } from '../types';
+import type { BubbleGeometry, FrameSettings } from '../types';
 import { runtime } from '../recorder/runtime';
 import { prepareSession } from '../recorder/recordingSession';
 import { PRESETS, probeAudioCodec } from '../recorder/encoderConfig';
@@ -331,6 +331,7 @@ async function beginRecording(): Promise<void> {
         layout,
         preset: PRESETS[settings.presetId],
         bubble: settings.bubble,
+        frame: settings.frame,
         audioCodec: settings.micEnabled || displayAudioTrack ? store().devices.audioCodec : null,
         libraryDir: runtime.libraryDir!,
       },
@@ -384,6 +385,11 @@ export function setMicMuted(muted: boolean): void {
 export function updateBubble(patch: Partial<BubbleGeometry>): void {
   store().patchBubble(patch);
   runtime.session?.setBubble(store().settings.bubble);
+}
+
+export function updateFrame(patch: Partial<FrameSettings>): void {
+  store().patchFrame(patch);
+  runtime.session?.setFrame(store().settings.frame);
 }
 
 export async function stopRecording(): Promise<void> {
