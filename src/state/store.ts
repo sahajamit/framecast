@@ -3,13 +3,14 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   BubbleGeometry,
   ExportFormat,
+  FrameSettings,
   LayoutKind,
   LibraryItem,
   MicProcessing,
   Phase,
   PresetId,
 } from '../types';
-import { DEFAULT_BUBBLE } from '../compositor/layout';
+import { DEFAULT_BUBBLE, DEFAULT_FRAME } from '../compositor/layout';
 
 export interface Settings {
   theme: 'dark' | 'light';
@@ -24,6 +25,7 @@ export interface Settings {
   presetId: PresetId;
   exportFormat: ExportFormat;
   bubble: BubbleGeometry;
+  frame: FrameSettings;
 }
 
 interface SessionState {
@@ -69,6 +71,7 @@ export interface AppState {
   setView: (view: 'record' | 'library') => void;
   patchSettings: (patch: Partial<Settings>) => void;
   patchBubble: (patch: Partial<BubbleGeometry>) => void;
+  patchFrame: (patch: Partial<FrameSettings>) => void;
   setPhase: (phase: Phase) => void;
   patchSession: (patch: Partial<SessionState>) => void;
   setDevices: (patch: Partial<DevicesState>) => void;
@@ -87,6 +90,7 @@ const DEFAULT_SETTINGS: Settings = {
   presetId: '1440p30',
   exportFormat: 'mp4',
   bubble: DEFAULT_BUBBLE,
+  frame: DEFAULT_FRAME,
 };
 
 const INITIAL_SESSION: SessionState = {
@@ -118,6 +122,10 @@ export const useStore = create<AppState>()(
         set((state) => ({
           settings: { ...state.settings, bubble: { ...state.settings.bubble, ...patch } },
         })),
+      patchFrame: (patch) =>
+        set((state) => ({
+          settings: { ...state.settings, frame: { ...state.settings.frame, ...patch } },
+        })),
       setPhase: (phase) => set((state) => ({ session: { ...state.session, phase } })),
       patchSession: (patch) => set((state) => ({ session: { ...state.session, ...patch } })),
       setDevices: (patch) => set((state) => ({ devices: { ...state.devices, ...patch } })),
@@ -125,7 +133,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'framecast-settings',
-      version: 2,
+      version: 3,
       // window.localStorage explicitly: Node's experimental localStorage
       // global shadows jsdom's working one in component tests.
       storage: createJSONStorage(() => window.localStorage),
@@ -134,6 +142,10 @@ export const useStore = create<AppState>()(
         const state = persisted as Partial<Pick<AppState, 'settings'>>;
         if (version < 2 && state.settings) {
           state.settings = { ...DEFAULT_SETTINGS, ...state.settings };
+        }
+        // v3 added scene framing — existing installs adopt the framed default.
+        if (version < 3 && state.settings && !state.settings.frame) {
+          state.settings = { ...state.settings, frame: DEFAULT_FRAME };
         }
         return state;
       },

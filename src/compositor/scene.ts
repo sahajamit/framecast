@@ -1,5 +1,7 @@
-import type { BubbleGeometry, LayoutKind } from '../types';
-import { bubbleRectPx, cameraSrcRect, containRect } from './layout';
+import type { BubbleGeometry, FrameSettings, LayoutKind } from '../types';
+import { bubbleRectPx, cameraSrcRect, containRect, frameRadiusPx, screenFrameRect } from './layout';
+import type { Box } from './layout';
+import { paintBackdrop } from './backdrops';
 
 /** A drawable image plus its intrinsic dimensions (VideoFrame, video element, canvas…). */
 export interface DrawSource {
@@ -13,31 +15,41 @@ export interface SceneState {
   outH: number;
   layout: LayoutKind;
   bubble: BubbleGeometry;
+  frame: FrameSettings;
   screen: DrawSource | null;
   camera: DrawSource | null;
 }
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
+/** Dark panel behind the inset content, shown in any aspect gap inside the frame. */
+const CARD_WELL = '#0a0908';
+
 /**
  * Draws one composited frame. Pure with respect to inputs — used identically
  * by the preflight preview (video elements) and the compositor worker
  * (VideoFrames), so what you see is exactly what gets recorded.
+ *
+ * Order: backdrop (fills the canvas) → inset screen/camera in a rounded,
+ * optionally shadowed frame → camera bubble on top (clamped to the full canvas,
+ * so it can straddle the frame edge). `backdrop:'none'` with pad 0 and radius 0
+ * reproduces the original full-bleed output.
  */
 export function drawScene(ctx: Ctx2D, state: SceneState): void {
-  const { outW, outH, layout, bubble, screen, camera } = state;
-  ctx.clearRect(0, 0, outW, outH);
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, outW, outH);
+  const { outW, outH, layout, bubble, frame, screen, camera } = state;
+
+  paintBackdrop(ctx, frame.backdrop, outW, outH, screen);
+
+  const box = screenFrameRect(frame.pad, outW, outH);
+  const radius = Math.min(frameRadiusPx(frame.radius, outH), Math.min(box.w, box.h) / 2);
 
   if (layout === 'camera') {
-    if (camera) drawCameraFull(ctx, camera, bubble, outW, outH);
+    if (camera) drawFramedCamera(ctx, camera, bubble, box, radius, frame.shadow, outH);
     return;
   }
 
   if (screen) {
-    const dst = containRect(screen.w, screen.h, outW, outH);
-    ctx.drawImage(screen.img, dst.x, dst.y, dst.w, dst.h);
+    drawFramedScreen(ctx, screen, box, radius, frame.shadow, outH);
   }
 
   if (layout === 'screen+camera' && camera && bubble.visible) {
@@ -45,20 +57,59 @@ export function drawScene(ctx: Ctx2D, state: SceneState): void {
   }
 }
 
-function drawCameraFull(
+function roundRectPath(ctx: Ctx2D, box: Box, r: number): void {
+  ctx.beginPath();
+  ctx.roundRect(box.x, box.y, box.w, box.h, r);
+}
+
+/** Soft drop shadow cast by the framed card onto the backdrop. */
+function drawCardShadow(ctx: Ctx2D, box: Box, radius: number, outH: number): void {
+  ctx.save();
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+  ctx.shadowBlur = Math.max(8, outH * 0.025);
+  ctx.shadowOffsetY = Math.max(2, outH * 0.006);
+  ctx.fillStyle = '#000';
+  roundRectPath(ctx, box, radius);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFramedScreen(
+  ctx: Ctx2D,
+  screen: DrawSource,
+  box: Box,
+  radius: number,
+  shadow: boolean,
+  outH: number,
+): void {
+  if (shadow) drawCardShadow(ctx, box, radius, outH);
+  ctx.save();
+  roundRectPath(ctx, box, radius);
+  ctx.clip();
+  ctx.fillStyle = CARD_WELL;
+  ctx.fillRect(box.x, box.y, box.w, box.h);
+  const dst = containRect(screen.w, screen.h, box.w, box.h);
+  ctx.drawImage(screen.img, box.x + dst.x, box.y + dst.y, dst.w, dst.h);
+  ctx.restore();
+}
+
+function drawFramedCamera(
   ctx: Ctx2D,
   camera: DrawSource,
   bubble: BubbleGeometry,
-  outW: number,
+  box: Box,
+  radius: number,
+  shadow: boolean,
   outH: number,
 ): void {
-  const src = cameraSrcRect(bubble.zoom, camera.w, camera.h, outW / outH);
+  if (shadow) drawCardShadow(ctx, box, radius, outH);
+  const src = cameraSrcRect(bubble.zoom, camera.w, camera.h, box.w / box.h);
   ctx.save();
-  if (bubble.mirror) {
-    ctx.translate(outW, 0);
-    ctx.scale(-1, 1);
-  }
-  ctx.drawImage(camera.img, src.sx, src.sy, src.sw, src.sh, 0, 0, outW, outH);
+  roundRectPath(ctx, box, radius);
+  ctx.clip();
+  ctx.translate(box.x + box.w / 2, box.y + box.h / 2);
+  if (bubble.mirror) ctx.scale(-1, 1);
+  ctx.drawImage(camera.img, src.sx, src.sy, src.sw, src.sh, -box.w / 2, -box.h / 2, box.w, box.h);
   ctx.restore();
 }
 

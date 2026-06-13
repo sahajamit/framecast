@@ -28,7 +28,7 @@ getDisplayMedia / getUserMedia
   → on stop: finalize + copy into the user's library folder (FSA dir handle)
 ```
 
-Module map: `src/capture` (device acquisition) · `src/audio` (mix graph + meters) · `src/compositor` (worker, **pure geometry in `layout.ts`**, shared renderer in `scene.ts`) · `src/recorder` (session orchestrator, encoder presets, OPFS writer, crash recovery) · `src/convert` (trim + MP4/WebM/MOV via mediabunny Conversion) · `src/enhance` (RNNoise + BS.1770 loudness, video packets pass through untouched) · `src/library` (FSA folder, scan, thumbs) · `src/pip` (Document PiP deck) · `src/state` (zustand; **live objects go in `src/recorder/runtime.ts`, never the store**) · `src/app` (screens + `controller.ts` orchestration).
+Module map: `src/capture` (device acquisition) · `src/audio` (mix graph + meters) · `src/compositor` (worker, **pure geometry in `layout.ts`**, shared renderer in `scene.ts`, code-drawn backdrops in `backdrops.ts`) · `src/recorder` (session orchestrator, encoder presets, OPFS writer, crash recovery) · `src/convert` (trim + MP4/WebM/MOV via mediabunny Conversion) · `src/enhance` (RNNoise + BS.1770 loudness, video packets pass through untouched) · `src/library` (FSA folder, scan, thumbs) · `src/pip` (Document PiP deck) · `src/state` (zustand; **live objects go in `src/recorder/runtime.ts`, never the store**) · `src/app` (screens + `controller.ts` orchestration).
 
 ## Invariants — do not break these
 
@@ -44,10 +44,18 @@ Module map: `src/capture` (device acquisition) · `src/audio` (mix graph + meter
 
 **Never let a constructed recording session idle.** `beginRecording()` runs the countdown FIRST, then builds the pipeline and calls `output.start()` immediately. A session constructed before the countdown (encoders + track sources waiting ~3 s for `start()`) crashes Chrome's renderer when a mic is involved. Regression-guarded by `e2e/real-flow.spec.ts`, which records in real mode (3 s countdown, real PiP, folder-mode library via an IDB-seeded handle) and fails on any `page.crash`. A `?cd=N` query param overrides the countdown length for debugging.
 
+## Invariant #9 (added with issue #5 — scene framing)
+
+**Scene framing lives entirely in the shared renderer, never the pipeline.** `drawScene` order is: backdrop (`compositor/backdrops.ts`, painted to fill the canvas) → inset screen/camera in a rounded, optionally shadowed frame (`screenFrameRect` + `containRect`) → bubble on top (still clamped to the **full canvas**, so it can straddle the frame edge). Three rules:
+
+- **Resolution-independent so preview == recording.** The 1280-wide preflight canvas and the full-res output must render the same relative frame: `frame.pad` is a fraction of output height; `frame.radius`, shadow and blur sizes are authored at a 1080p reference and scaled by `outH/1080` (`frameRadiusPx`). Never store frame sizes in raw output px.
+- **Backdrops are theme-invariant and code-drawn.** Colors are hardcoded in `backdrops.ts` (never CSS tokens) because the backdrop is part of the recording, not the chrome, so it must not flip with the app theme. No image assets (keeps the PWA flat); the `blur` backdrop samples the live screen via a downscaled scratch buffer.
+- **`backdrop:'none'` + pad 0 + radius 0 reproduces the original full-bleed output.** e2e runs this raw path by default (`freshApp` sets it); `e2e/scene.spec.ts` opts into framing and samples a decoded corner pixel to prove the backdrop is baked into the MP4. Framing is on by default for real use (`DEFAULT_FRAME`, charcoal preset).
+
 ## Testing conventions
 
 - E2E mode is `?e2e=1` (`src/library/fsAccess.ts isE2E()`): library backed by OPFS (no native picker), deck rendered inline (no PiP), 1 s countdown. Playwright launches real Chrome with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream --auto-select-tab-capture-source-by-title=framecast`.
-- Test hooks live on `window.__framecast` (`src/app/testHook.ts`), only in e2e mode: `listLibrary()`, `inspectFile(name)` (re-opens output with mediabunny and returns duration/codecs — this is how specs assert real file contents).
+- Test hooks live on `window.__framecast` (`src/app/testHook.ts`), only in e2e mode: `listLibrary()`, `inspectFile(name)` (re-opens output with mediabunny and returns duration/codecs — this is how specs assert real file contents), `setFrame(patch)` (drive scene framing deterministically), `sampleTopLeft(name)` (decode a frame and read a corner pixel).
 - CDP `Page.crash` never resolves its promise; send it fire-and-forget (see `e2e/recovery.spec.ts`).
 - Unit tests cover pure math only (layout, BS.1770 loudness with sine reference vectors, encoder presets). Keep them free of DOM/media APIs.
 
@@ -67,4 +75,4 @@ No em dashes. Use periods, commas, colons or parentheses. (House rule for everyt
 
 ## Phase 2 backlog
 
-Tracked in README "Roadmap": teleprompter in the deck, dual-mic, background blur, zoom-on-click, wallpaper padding, GIF export, 9:16 vertical, keyframe-snapped head-trim, Electron wrapper.
+Tracked in README "Roadmap": teleprompter in the deck, dual-mic, background blur, live zoom (issue #6), GIF export, 9:16 vertical, keyframe-snapped head-trim, Electron wrapper. (Scene framing / "wallpaper padding" shipped via issue #5.)

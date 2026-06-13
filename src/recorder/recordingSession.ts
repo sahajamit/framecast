@@ -5,7 +5,7 @@ import {
   Output,
   StreamTarget,
 } from 'mediabunny';
-import type { BubbleGeometry, LayoutKind, QualityPreset } from '../types';
+import type { BubbleGeometry, FrameSettings, LayoutKind, QualityPreset } from '../types';
 import type { FromCompositor, ToCompositor } from '../compositor/protocol';
 import type { AudioGraph } from '../audio/audioGraph';
 import { AUDIO_BITRATE, assertVideoEncodable, outputDims } from './encoderConfig';
@@ -19,6 +19,7 @@ export interface SessionConfig {
   layout: LayoutKind;
   preset: QualityPreset;
   bubble: BubbleGeometry;
+  frame: FrameSettings;
   audioCodec: 'aac' | 'opus' | null;
   libraryDir: FileSystemDirectoryHandle;
 }
@@ -43,6 +44,7 @@ export interface ActiveSession {
   pause(): void;
   resume(): void;
   setBubble(bubble: BubbleGeometry): void;
+  setFrame(frame: FrameSettings): void;
   stop(): Promise<{ fileName: string; handle: FileSystemFileHandle }>;
   /** Tear down and delete the part file (error/cancel path). */
   abort(): Promise<void>;
@@ -97,6 +99,7 @@ export async function prepareSession(
     fps: cfg.preset.fps,
     layout: cfg.layout,
     bubble: cfg.bubble,
+    frame: cfg.frame,
     screen: screenReadable,
     camera: cameraReadable,
     out: generator.writable,
@@ -162,6 +165,10 @@ export async function prepareSession(
 
     setBubble(bubble: BubbleGeometry) {
       worker.postMessage({ type: 'bubble', bubble } satisfies ToCompositor);
+    },
+
+    setFrame(frame: FrameSettings) {
+      worker.postMessage({ type: 'frame', frame } satisfies ToCompositor);
     },
 
     async stop() {

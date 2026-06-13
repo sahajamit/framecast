@@ -3,14 +3,22 @@ import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent }
 import { useStore } from '../state/store';
 import { updateBubble } from '../app/controller';
 import { clampBubble, hitTest, snapTarget, ZOOM_MAX, ZOOM_MIN, clamp } from '../compositor/layout';
+import type { Box } from '../compositor/layout';
 import { mapPointerToContent } from './pointerMap';
 
 /**
  * Drag + scroll-to-zoom behavior for the camera bubble, shared by the
  * preflight stage and the recording deck. The element renders content of
- * size `getContent()` letterboxed inside itself.
+ * size `getContent()` letterboxed inside itself. `getFrame`, when provided,
+ * returns the inset screen-frame box (in content px) so the bubble snaps to the
+ * screen frame's corners — letting it straddle the border — instead of the
+ * canvas corners.
  */
-export function useBubbleDrag(getContent: () => { w: number; h: number }, enabled: boolean) {
+export function useBubbleDrag(
+  getContent: () => { w: number; h: number },
+  enabled: boolean,
+  getFrame?: () => Box | undefined,
+) {
   const [hovering, setHovering] = useState(false);
   const [dragging, setDragging] = useState(false);
   const grab = useRef<{ dx: number; dy: number } | null>(null);
@@ -53,7 +61,7 @@ export function useBubbleDrag(getContent: () => { w: number; h: number }, enable
     setDragging(false);
     grab.current = null;
     const { w, h } = getContent();
-    const snapped = snapTarget(bubble(), w, h);
+    const snapped = snapTarget(bubble(), w, h, getFrame?.());
     if (snapped) updateBubble({ cx: snapped.cx, cy: snapped.cy });
   }
 

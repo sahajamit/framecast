@@ -14,6 +14,11 @@ export async function freshApp(page: Page): Promise<void> {
   });
   await page.reload();
   await expect(page.locator('[data-phase="preflight"]')).toBeVisible({ timeout: 15_000 });
+  // The default is framed; existing specs assert the raw, full-bleed output, so
+  // turn scene framing off here. The scene spec opts back in explicitly.
+  await page.evaluate(() =>
+    window.__framecast!.setFrame({ backdrop: 'none', pad: 0, radius: 0, shadow: false }),
+  );
 }
 
 export async function startRecording(page: Page): Promise<void> {
@@ -58,6 +63,13 @@ declare global {
     __framecast?: {
       inspectFile(name: string): Promise<InspectInfo>;
       listLibrary(): Promise<string[]>;
+      setFrame(patch: {
+        backdrop?: string;
+        pad?: number;
+        radius?: number;
+        shadow?: boolean;
+      }): void;
+      sampleTopLeft(name: string): Promise<[number, number, number]>;
     };
   }
 }

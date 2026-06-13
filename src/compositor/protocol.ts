@@ -1,4 +1,4 @@
-import type { BubbleGeometry, LayoutKind } from '../types';
+import type { BubbleGeometry, FrameSettings, LayoutKind } from '../types';
 
 export interface CompositorInit {
   type: 'init';
@@ -7,6 +7,7 @@ export interface CompositorInit {
   fps: number;
   layout: LayoutKind;
   bubble: BubbleGeometry;
+  frame: FrameSettings;
   /** Transferred MediaStreamTrackProcessor readables. */
   screen: ReadableStream<VideoFrame> | null;
   camera: ReadableStream<VideoFrame> | null;
@@ -17,6 +18,7 @@ export interface CompositorInit {
 export type ToCompositor =
   | CompositorInit
   | { type: 'bubble'; bubble: BubbleGeometry }
+  | { type: 'frame'; frame: FrameSettings }
   | { type: 'stop' };
 
 export type FromCompositor =

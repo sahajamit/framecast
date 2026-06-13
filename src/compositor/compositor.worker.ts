@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { drawScene } from './scene';
 import type { FromCompositor, ToCompositor } from './protocol';
-import type { BubbleGeometry, LayoutKind } from '../types';
+import type { BubbleGeometry, FrameSettings, LayoutKind } from '../types';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -13,6 +13,7 @@ let outH = 0;
 let frameIntervalMs = 1000 / 30;
 let layout: LayoutKind = 'screen+camera';
 let bubble: BubbleGeometry | null = null;
+let sceneFrame: FrameSettings | null = null;
 
 let latestScreen: VideoFrame | null = null;
 let latestCamera: VideoFrame | null = null;
@@ -31,10 +32,25 @@ self.onmessage = (event: MessageEvent<ToCompositor>) => {
   const msg = event.data;
   switch (msg.type) {
     case 'init':
-      init(msg.width, msg.height, msg.fps, msg.layout, msg.bubble, msg.screen, msg.camera, msg.out);
+      init(
+        msg.width,
+        msg.height,
+        msg.fps,
+        msg.layout,
+        msg.bubble,
+        msg.frame,
+        msg.screen,
+        msg.camera,
+        msg.out,
+      );
       break;
     case 'bubble':
       bubble = msg.bubble;
+      dirty = true;
+      scheduleDraw();
+      break;
+    case 'frame':
+      sceneFrame = msg.frame;
       dirty = true;
       scheduleDraw();
       break;
@@ -50,6 +66,7 @@ function init(
   fps: number,
   initialLayout: LayoutKind,
   initialBubble: BubbleGeometry,
+  initialFrame: FrameSettings,
   screen: ReadableStream<VideoFrame> | null,
   camera: ReadableStream<VideoFrame> | null,
   out: WritableStream<VideoFrame>,
@@ -59,6 +76,7 @@ function init(
   frameIntervalMs = 1000 / fps;
   layout = initialLayout;
   bubble = initialBubble;
+  sceneFrame = initialFrame;
   canvas = new OffscreenCanvas(width, height);
   ctx = canvas.getContext('2d', { desynchronized: true });
   if (!ctx) {
@@ -116,12 +134,13 @@ function scheduleDraw(): void {
 }
 
 function draw(): void {
-  if (!ctx || !canvas || !writer || !bubble) return;
+  if (!ctx || !canvas || !writer || !bubble || !sceneFrame) return;
   drawScene(ctx, {
     outW,
     outH,
     layout,
     bubble,
+    frame: sceneFrame,
     screen: latestScreen
       ? { img: latestScreen, w: latestScreen.displayWidth, h: latestScreen.displayHeight }
       : null,
