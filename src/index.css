@@ -966,6 +966,54 @@ input[type='range'].trim-range:focus-visible::-webkit-slider-thumb {
   gap: 8px;
 }
 
+/* ---------------- preflight layout ---------------- */
+/* Monitor on the left (large, pinned), the channel-strip modules in two columns
+   on the right so nothing scrolls the monitor out of view while you adjust it. */
+.preflight-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 680px;
+  gap: 20px;
+  align-items: start;
+}
+.preflight-grid .monitor {
+  position: sticky;
+  top: 16px;
+}
+.config-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-content: start;
+}
+.config-panel .rec-mod {
+  grid-column: 1 / -1;
+}
+.rail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+/* 13-inch laptops / iPad landscape: collapse to one rail (it may scroll, but the
+   monitor stays pinned). */
+@media (max-width: 1399px) {
+  .preflight-grid {
+    grid-template-columns: minmax(0, 1fr) 336px;
+  }
+  .config-panel {
+    grid-template-columns: 1fr;
+  }
+}
+/* Narrow: stack the monitor above the controls. */
+@media (max-width: 1023px) {
+  .preflight-grid {
+    grid-template-columns: 1fr;
+  }
+  .preflight-grid .monitor {
+    position: static;
+  }
+}
+
 /* ---------------- monitor shell + stage ---------------- */
 .monitor {
   background: var(--grad-module);

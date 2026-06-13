@@ -132,7 +132,7 @@ export function App() {
       </header>
 
       {library.recoverable.length > 0 && !activeTake && (
-        <div className="max-w-[1200px] w-full mx-auto px-6 pt-4">
+        <div className="max-w-[1680px] w-full mx-auto px-6 pt-4">
           <div className="banner">
             <Lamp kind="warn" />
             <div className="b-msg">
@@ -182,10 +182,10 @@ export function App() {
         </div>
       )}
 
-      <main className="flex-1 max-w-[1200px] w-full mx-auto px-6 py-5">{content}</main>
+      <main className="flex-1 max-w-[1680px] w-full mx-auto px-6 py-5">{content}</main>
 
       <footer style={{ borderTop: '1px solid var(--color-line)' }}>
-        <div className="max-w-[1200px] mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="max-w-[1680px] mx-auto px-6 py-3 flex items-center justify-between">
           <span className="label">It happens here · no uploads · no telemetry</span>
           <a
             href="https://github.com/sahajamit/framecast"
