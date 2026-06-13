@@ -3,6 +3,7 @@ import { useStore } from '../state/store';
 import { runtime } from '../recorder/runtime';
 import {
   onMediaChanged,
+  resetFocus,
   selectScreen,
   startFlow,
   stopScreenShare,
@@ -10,12 +11,19 @@ import {
   syncMic,
   toast,
   updateBubble,
+  updateFocus,
   updateFrame,
 } from './controller';
 import { drawScene } from '../compositor/scene';
+import { FocusAnimator } from '../compositor/focus';
 import {
   BUBBLE_MAX_SIZE,
   BUBBLE_MIN_SIZE,
+  DEFAULT_FOCUS,
+  FOCUS_GLIDE_MS,
+  FOCUS_ZOOM_MAX,
+  focusForZoom,
+  focusZoomFactor,
   PAD_MAX,
   RADIUS_MAX,
   screenFrameRect,
@@ -24,7 +32,8 @@ import {
 } from '../compositor/layout';
 import { Fader, Module, Segmented, SelectField, Switch, Timecode, VuMeter } from '../ui/controls';
 import { BackdropPicker } from '../ui/BackdropPicker';
-import { useBubbleDrag } from '../ui/useBubbleDrag';
+import { useStageGestures, type FocusTool } from '../ui/useStageGestures';
+import { prefersReducedMotion } from '../ui/reducedMotion';
 import { meterPosition, readLevel } from '../audio/levelMeter';
 import { PRESETS } from '../recorder/encoderConfig';
 import type { PresetId } from '../types';
@@ -37,12 +46,16 @@ export function PreflightScreen() {
   const devices = useStore((s) => s.devices);
   const screenReady = useStore((s) => s.session.screenReady);
   const screenInfo = useStore((s) => s.session.screenInfo);
+  const focus = useStore((s) => s.focus);
   const { patchSettings, patchBubble } = useStore.getState();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const camVideoRef = useRef<HTMLVideoElement>(null);
   const screenVideoRef = useRef<HTMLVideoElement>(null);
+  const focusAnim = useRef(new FocusAnimator(DEFAULT_FOCUS));
+  const lastFocusTarget = useRef(DEFAULT_FOCUS);
   const [micLevel, setMicLevel] = useState(0);
+  const [tool, setTool] = useState<FocusTool>('off');
   const [, setMediaEpoch] = useState(0);
 
   // Acquire / release devices to match settings.
@@ -81,13 +94,25 @@ export function PreflightScreen() {
       const screen = screenVideoRef.current;
       const screenLive =
         useStore.getState().session.screenReady && screen && screen.videoWidth > 0 ? screen : null;
-      const s = useStore.getState().settings;
+      const live = useStore.getState();
+      const s = live.settings;
+      // Rehearse the punch-in with the same easer the recording uses (WYSIWYG).
+      if (live.focus !== lastFocusTarget.current) {
+        lastFocusTarget.current = live.focus;
+        focusAnim.current.setTarget(
+          live.focus,
+          prefersReducedMotion() ? 0 : FOCUS_GLIDE_MS,
+          performance.now(),
+        );
+      }
+      focusAnim.current.tick(performance.now());
       drawScene(ctx, {
         outW: STAGE_W,
         outH: STAGE_H,
         layout: s.layout,
         bubble: s.bubble,
         frame: s.frame,
+        focus: focusAnim.current.current,
         screen: screenLive
           ? { img: screenLive, w: screenLive.videoWidth, h: screenLive.videoHeight }
           : { img: placeholder, w: STAGE_W, h: STAGE_H },
@@ -107,16 +132,26 @@ export function PreflightScreen() {
     return () => clearInterval(tick);
   }, [settings.micEnabled]);
 
-  const { handlers, cursor } = useBubbleDrag(
-    () => ({ w: STAGE_W, h: STAGE_H }),
-    settings.layout === 'screen+camera',
-    () => {
+  const { handlers, cursor, marquee } = useStageGestures(() => ({ w: STAGE_W, h: STAGE_H }), {
+    bubbleEnabled: settings.layout === 'screen+camera',
+    focusEnabled: settings.layout !== 'camera' && screenReady,
+    getTool: () => tool,
+    getFrame: () => {
       const f = useStore.getState().settings.frame;
       // Snap to the screen frame (so the bubble can straddle the border) only
       // when framing is on; otherwise keep the canvas-corner snap.
       return f.backdrop !== 'none' || f.pad > 0 ? screenFrameRect(f.pad, STAGE_W, STAGE_H) : undefined;
     },
-  );
+  });
+
+  function selectFocusTool(t: FocusTool) {
+    setTool(t);
+    if (t === 'off') resetFocus();
+  }
+  function punchPreset(z: number) {
+    setTool('zoom');
+    updateFocus(focusForZoom(z));
+  }
 
   const needsScreen = settings.layout !== 'camera';
   const canStart = settings.layout === 'camera' ? !!runtime.cameraStream : screenReady;
@@ -157,6 +192,17 @@ export function PreflightScreen() {
         </div>
         <div className="stage force-dark" style={{ cursor, touchAction: 'none' }} {...handlers}>
           <canvas ref={canvasRef} width={STAGE_W} height={STAGE_H} />
+          {marquee && (
+            <div
+              className="focus-marquee"
+              style={{
+                left: marquee.left,
+                top: marquee.top,
+                width: marquee.width,
+                height: marquee.height,
+              }}
+            />
+          )}
         </div>
         <div className="monitor-strip">
           <span className={canStart ? 'ok' : ''}>● Signal</span>
@@ -391,6 +437,49 @@ export function PreflightScreen() {
             />
           </div>
           <p className="mod-hint">Padding trades screen pixels for style.</p>
+        </Module>
+
+        <Module title="Focus" no="CH·05">
+          <Segmented
+            ariaLabel="Focus"
+            value={tool}
+            onChange={selectFocusTool}
+            options={[
+              { value: 'off', label: 'Off' },
+              { value: 'zoom', label: 'Punch' },
+              { value: 'spotlight', label: 'Spot' },
+            ]}
+          />
+          <div className="mt-3">
+            <Fader
+              label="Screen zoom"
+              value={focus.mode === 'zoom' ? focusZoomFactor(focus) : 1}
+              min={1}
+              max={FOCUS_ZOOM_MAX}
+              step={0.1}
+              onChange={(z) => punchPreset(z)}
+              format={(v) => `${v.toFixed(1)}×`}
+            />
+          </div>
+          <div className="sw-row mt-4 px-2">
+            <button type="button" className="btn-s" onClick={() => punchPreset(1.5)}>
+              1.5×
+            </button>
+            <button type="button" className="btn-s" onClick={() => punchPreset(2)}>
+              2×
+            </button>
+            <button
+              type="button"
+              className="btn-s"
+              onClick={() => {
+                setTool('off');
+                resetFocus();
+              }}
+            >
+              ⟲ 1×
+            </button>
+          </div>
+          <p className="mod-hint">Drag on the monitor to target a region. 0 or Esc to exit.</p>
         </Module>
 
         <div className="rec-mod">

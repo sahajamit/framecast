@@ -1,15 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { elapsedMs, formatElapsed, useStore } from '../state/store';
 import { runtime } from '../recorder/runtime';
-import { setMicMuted, stopRecording, togglePause, updateBubble } from '../app/controller';
-import { Fader, Lamp, Timecode, VuMeter } from '../ui/controls';
-import { useBubbleDrag } from '../ui/useBubbleDrag';
+import {
+  resetFocus,
+  setMicMuted,
+  stopRecording,
+  togglePause,
+  updateBubble,
+  updateFocus,
+} from '../app/controller';
+import { Fader, Lamp, Segmented, Timecode, VuMeter } from '../ui/controls';
+import { useStageGestures, type FocusTool } from '../ui/useStageGestures';
 import { readLevel, meterPosition } from '../audio/levelMeter';
 import { registerShortcuts } from '../shortcuts/keyboard';
 import {
   BUBBLE_MAX_SIZE,
   BUBBLE_MIN_SIZE,
   cornerPosition,
+  focusForZoom,
+  focusZoomFactor,
   ZOOM_MAX,
   ZOOM_MIN,
   type SnapCorner,
@@ -41,10 +50,12 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
   const layout = useStore((s) => s.settings.layout);
   const micEnabled = useStore((s) => s.settings.micEnabled);
   const presetId = useStore((s) => s.settings.presetId);
+  const focus = useStore((s) => s.focus);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [clock, setClock] = useState('00:00');
   const [level, setLevel] = useState(0);
+  const [tool, setTool] = useState<FocusTool>('off');
 
   const session = runtime.session;
   const hasBubble = layout === 'screen+camera';
@@ -77,12 +88,35 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
         toggleMic: () => setMicMuted(!useStore.getState().session.micMuted),
         toggleCamera: () => updateBubble({ visible: !useStore.getState().settings.bubble.visible }),
         snap: snapTo,
+        resetFocus: () => {
+          setTool('off');
+          resetFocus();
+        },
       }),
     [windowRef],
   );
 
   const content = () => (session ? { w: session.width, h: session.height } : { w: 16, h: 9 });
-  const { handlers, cursor } = useBubbleDrag(content, hasBubble && bubble.visible);
+  const { handlers, cursor, marquee } = useStageGestures(content, {
+    bubbleEnabled: hasBubble && bubble.visible,
+    focusEnabled: phase === 'recording' || phase === 'paused',
+    getTool: () => tool,
+  });
+
+  function selectTool(t: FocusTool) {
+    setTool(t);
+    if (t === 'off') resetFocus();
+  }
+  function punchPreset(z: number) {
+    setTool('zoom');
+    updateFocus(focusForZoom(z));
+  }
+  const zoomReadout =
+    focus.mode === 'zoom'
+      ? `${focusZoomFactor(focus).toFixed(1)}×`
+      : focus.mode === 'spotlight'
+        ? 'SPOT'
+        : '1.0×';
 
   const recording = phase === 'recording';
   const paused = phase === 'paused';
@@ -111,6 +145,17 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
       <div className="relative">
         <div className="stage" style={{ cursor, touchAction: 'none' }} {...handlers}>
           <video ref={videoRef} muted playsInline autoPlay className="object-contain pointer-events-none" />
+          {marquee && (
+            <div
+              className="focus-marquee"
+              style={{
+                left: marquee.left,
+                top: marquee.top,
+                width: marquee.width,
+                height: marquee.height,
+              }}
+            />
+          )}
           {counting && (
             <div
               className="absolute inset-0 grid place-items-center"
@@ -145,6 +190,39 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
                 onClick={() => snapTo(corner)}
               />
             ))}
+        </div>
+      </div>
+
+      <div className={`focus-strip ${focus.mode !== 'none' ? 'active' : ''}`}>
+        <Segmented
+          ariaLabel="Focus"
+          value={tool}
+          onChange={selectTool}
+          options={[
+            { value: 'off', label: 'Off' },
+            { value: 'zoom', label: 'Punch' },
+            { value: 'spotlight', label: 'Spot' },
+          ]}
+        />
+        <div className="focus-row">
+          <button type="button" className="btn-s" onClick={() => punchPreset(1.5)}>
+            1.5×
+          </button>
+          <button type="button" className="btn-s" onClick={() => punchPreset(2)}>
+            2×
+          </button>
+          <button
+            type="button"
+            className="btn-s"
+            onClick={() => {
+              setTool('off');
+              resetFocus();
+            }}
+          >
+            ⟲ 1×
+          </button>
+          <span className="flex-1" />
+          <span className="focus-read mono-read">{zoomReadout}</span>
         </div>
       </div>
 

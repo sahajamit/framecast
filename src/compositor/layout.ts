@@ -1,4 +1,4 @@
-import type { BubbleGeometry, FrameSettings } from '../types';
+import type { BubbleGeometry, FrameSettings, ScreenFocus } from '../types';
 
 export interface RectPx {
   x: number;
@@ -34,6 +34,18 @@ export const PAD_MAX = 0.12;
 export const RADIUS_MAX = 24;
 /** Reference output height the scene radius / shadow sizes are authored against. */
 export const FRAME_REF_H = 1080;
+
+/** Live screen-zoom (punch-in) ceiling, and the matching minimum region size. */
+export const FOCUS_ZOOM_MAX = 4;
+export const FOCUS_W_MIN = 1 / FOCUS_ZOOM_MAX;
+/** Quick centered-zoom levels offered as deck/preflight presets. */
+export const FOCUS_PRESET_ZOOMS = [1, 1.5, 2] as const;
+/** Opacity of the scrim painted outside a spotlight region. */
+export const SPOTLIGHT_DIM = 0.45;
+/** Spotlight edge feather, as a fraction of the region's smaller side. */
+export const FOCUS_FEATHER = 0.05;
+/** Punch-in / pull-out glide duration (ms); reduced-motion snaps instead. */
+export const FOCUS_GLIDE_MS = 380;
 /** Distance of snap anchors from the canvas edge, as a fraction of min(outW, outH). */
 export const SNAP_EDGE_MARGIN = 0.03;
 /** Drag-end distance (fraction of min dim) within which the bubble snaps to a corner. */
@@ -174,6 +186,83 @@ export function frameRadiusPx(radius: number, outH: number): number {
   return Math.max(0, radius) * (outH / FRAME_REF_H);
 }
 
+/**
+ * Where the screen image is drawn within the output, in output px: the framed
+ * card (screenFrameRect) with the source contain-fitted inside it. The output
+ * follows the source aspect, so the output ratio is used as the source ratio.
+ * Lets the UI map a pointer/box on the preview into screen-content coordinates.
+ */
+export function screenContentRect(pad: number, outW: number, outH: number): Box {
+  const card = screenFrameRect(pad, outW, outH);
+  const dst = containRect(outW, outH, card.w, card.h);
+  return { x: card.x + dst.x, y: card.y + dst.y, w: dst.w, h: dst.h };
+}
+
+/** Smallest spotlight region (fraction of a side); spotlights can be tighter than zooms. */
+export const FOCUS_SPOTLIGHT_MIN = 0.1;
+
+/**
+ * Source-crop rectangle for a screen-zoom focus. `focus.w/h` are fractions of
+ * the source image; the crop is centered on (cx,cy) and clamped so it never
+ * leaves the source. At w=h=1 this is the whole image (identity), so a
+ * mode:'none' / full focus draws exactly as before.
+ *
+ * For an undistorted punch the caller keeps w === h: the displayed screen rect
+ * is a contain-fit of the source (same aspect), so an equal width/height
+ * fraction crops a source-aspect rectangle that fills the frame without stretch.
+ */
+export function screenSrcRect(focus: ScreenFocus, srcW: number, srcH: number): SrcRect {
+  const sw = clamp(focus.w, FOCUS_W_MIN, 1) * srcW;
+  const sh = clamp(focus.h, FOCUS_W_MIN, 1) * srcH;
+  const cx = clamp(focus.cx * srcW, sw / 2, srcW - sw / 2);
+  const cy = clamp(focus.cy * srcH, sh / 2, srcH - sh / 2);
+  return { sx: cx - sw / 2, sy: cy - sh / 2, sw, sh };
+}
+
+/**
+ * Snaps a raw drawn box (already normalized to the screen content) to a valid
+ * focus. Zoom locks to a square (w === h) by expanding to the larger side, so
+ * the punch fills the frame undistorted and nothing the user boxed is cut off;
+ * spotlight keeps the drawn shape. Both clamp to min size and inside [0,1]².
+ */
+export function normalizeFocusRect(
+  raw: { cx: number; cy: number; w: number; h: number },
+  mode: 'zoom' | 'spotlight',
+): ScreenFocus {
+  let w = Math.abs(raw.w);
+  let h = Math.abs(raw.h);
+  if (mode === 'zoom') {
+    w = h = clamp(Math.max(w, h), FOCUS_W_MIN, 1);
+  } else {
+    w = clamp(w, FOCUS_SPOTLIGHT_MIN, 1);
+    h = clamp(h, FOCUS_SPOTLIGHT_MIN, 1);
+  }
+  return {
+    mode,
+    w,
+    h,
+    cx: clamp(raw.cx, w / 2, 1 - w / 2),
+    cy: clamp(raw.cy, h / 2, 1 - h / 2),
+  };
+}
+
+/** A centered zoom focus for a given factor (presets, scroll, click-to-punch). */
+export function focusForZoom(zoom: number, cx = 0.5, cy = 0.5): ScreenFocus {
+  const s = 1 / clamp(zoom, 1, FOCUS_ZOOM_MAX);
+  return {
+    mode: 'zoom',
+    w: s,
+    h: s,
+    cx: clamp(cx, s / 2, 1 - s / 2),
+    cy: clamp(cy, s / 2, 1 - s / 2),
+  };
+}
+
+/** The implied magnification of a focus (1 = full frame). */
+export function focusZoomFactor(focus: ScreenFocus): number {
+  return clamp(1 / focus.w, 1, FOCUS_ZOOM_MAX);
+}
+
 /** Keeps the bubble fully inside the canvas. */
 export function clampBubble(geom: BubbleGeometry, outW: number, outH: number): BubbleGeometry {
   const d = geom.size * Math.min(outW, outH);
@@ -246,3 +335,6 @@ export const DEFAULT_FRAME: FrameSettings = {
   radius: 12,
   shadow: true,
 };
+
+/** No punch-in: full screen. A take always arms at this. */
+export const DEFAULT_FOCUS: ScreenFocus = { mode: 'none', cx: 0.5, cy: 0.5, w: 1, h: 1 };
