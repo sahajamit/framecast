@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 // The capture/controller layer touches getUserMedia & friends, which don't
@@ -15,15 +15,22 @@ vi.mock('../../src/app/controller', () => ({
   toast: vi.fn(),
   updateBubble: vi.fn(),
   updateFrame: vi.fn(),
+  updateCameraBackground: vi.fn(),
   updateFocus: vi.fn(),
   resetFocus: vi.fn(),
 }));
 
 import { PreflightScreen } from '../../src/app/PreflightScreen';
+import { updateCameraBackground } from '../../src/app/controller';
 import { useStore } from '../../src/state/store';
 
 function setSession(patch: Parameters<ReturnType<typeof useStore.getState>['patchSession']>[0]) {
   useStore.getState().patchSession(patch);
+}
+
+// The controls live in a tabbed panel now; open a tab before asserting its body.
+function openTab(name: string) {
+  fireEvent.click(screen.getByRole('tab', { name }));
 }
 
 describe('PreflightScreen gating', () => {
@@ -31,6 +38,7 @@ describe('PreflightScreen gating', () => {
     cleanup();
     setSession({ screenReady: false, screenInfo: null });
     useStore.getState().patchSettings({ layout: 'screen+camera' });
+    useStore.getState().patchCameraBackground({ mode: 'none', blur: 18, builtinId: 'studio' });
   });
 
   it('disables Start and shows the select-screen step until a screen is picked', () => {
@@ -60,16 +68,41 @@ describe('PreflightScreen gating', () => {
 
   it('renders the Scene framing module with its controls', () => {
     render(<PreflightScreen />);
-    expect(screen.getByText('Scene')).toBeInTheDocument();
+    openTab('Scene');
     expect(screen.getByRole('group', { name: /backdrop/i })).toBeInTheDocument();
     expect(screen.getByLabelText('Padding')).toBeInTheDocument();
     expect(screen.getByLabelText('Corner radius')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: /drop shadow/i })).toBeInTheDocument();
   });
 
+  it('renders the Camera background control and dispatches a mode change', () => {
+    vi.mocked(updateCameraBackground).mockClear();
+    render(<PreflightScreen />);
+    openTab('Camera');
+    const group = screen.getByRole('group', { name: /^camera background$/i });
+    expect(group).toBeInTheDocument();
+    fireEvent.click(within(group).getByRole('button', { name: 'Blur' }));
+    expect(updateCameraBackground).toHaveBeenCalledWith({ mode: 'blur' });
+  });
+
+  it('reveals the built-in backdrop picker only in Backdrop mode', () => {
+    render(<PreflightScreen />);
+    openTab('Camera');
+    // No swatch picker while mode is None.
+    expect(screen.queryByRole('group', { name: /camera backdrop/i })).not.toBeInTheDocument();
+
+    useStore.getState().patchCameraBackground({ mode: 'builtin' });
+    cleanup();
+    render(<PreflightScreen />);
+    openTab('Camera');
+    const bg = screen.getByRole('group', { name: /camera backdrop/i });
+    expect(bg).toBeInTheDocument();
+    expect(within(bg).getByLabelText('Studio')).toBeInTheDocument();
+  });
+
   it('renders the Focus (live zoom) module with its controls', () => {
     render(<PreflightScreen />);
-    expect(screen.getByText('Focus')).toBeInTheDocument();
+    openTab('Focus');
     expect(screen.getByRole('group', { name: /focus/i })).toBeInTheDocument();
     expect(screen.getByLabelText('Screen zoom')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /punch/i })).toBeInTheDocument();

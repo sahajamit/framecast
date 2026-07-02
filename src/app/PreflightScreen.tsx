@@ -11,14 +11,18 @@ import {
   syncMic,
   toast,
   updateBubble,
+  updateCameraBackground,
   updateFocus,
   updateFrame,
 } from './controller';
 import { drawScene } from '../compositor/scene';
 import { FocusAnimator } from '../compositor/focus';
+import { createCameraSegmenter, type CameraSegmenter } from '../compositor/segmentation';
 import {
   BUBBLE_MAX_SIZE,
   BUBBLE_MIN_SIZE,
+  CAMERA_BLUR_MAX,
+  CAMERA_BLUR_MIN,
   DEFAULT_FOCUS,
   FOCUS_GLIDE_MS,
   FOCUS_ZOOM_MAX,
@@ -32,6 +36,7 @@ import {
 } from '../compositor/layout';
 import { Fader, Module, Segmented, SelectField, Switch, Timecode, VuMeter } from '../ui/controls';
 import { BackdropPicker } from '../ui/BackdropPicker';
+import { CameraBackgroundPicker } from '../ui/CameraBackgroundPicker';
 import { useStageGestures, type FocusTool } from '../ui/useStageGestures';
 import { prefersReducedMotion } from '../ui/reducedMotion';
 import { meterPosition, readLevel } from '../audio/levelMeter';
@@ -40,6 +45,8 @@ import type { PresetId } from '../types';
 
 const STAGE_W = 1280;
 const STAGE_H = 720;
+
+type TabId = 'program' | 'camera' | 'mic' | 'scene' | 'focus' | 'output';
 
 export function PreflightScreen() {
   const settings = useStore((s) => s.settings);
@@ -54,9 +61,24 @@ export function PreflightScreen() {
   const screenVideoRef = useRef<HTMLVideoElement>(null);
   const focusAnim = useRef(new FocusAnimator(DEFAULT_FOCUS));
   const lastFocusTarget = useRef(DEFAULT_FOCUS);
+  const segmenterRef = useRef<CameraSegmenter | null>(null);
   const [micLevel, setMicLevel] = useState(0);
   const [tool, setTool] = useState<FocusTool>('off');
+  const [activeTab, setActiveTab] = useState<TabId>('program');
   const [, setMediaEpoch] = useState(0);
+
+  // The control panel is a single tab at a time so it always fits without
+  // scrolling. Tabs unavailable in the current layout are hidden.
+  const tabs = (
+    [
+      { id: 'program', label: 'Program', show: true },
+      { id: 'camera', label: 'Camera', show: settings.layout !== 'screen' },
+      { id: 'mic', label: 'Mic', show: true },
+      { id: 'scene', label: 'Scene', show: true },
+      { id: 'focus', label: 'Focus', show: settings.layout !== 'camera' },
+      { id: 'output', label: 'Output', show: true },
+    ] as { id: TabId; label: string; show: boolean }[]
+  ).filter((t) => t.show);
 
   // Acquire / release devices to match settings.
   useEffect(() => {
@@ -66,6 +88,29 @@ export function PreflightScreen() {
     void syncMic();
   }, [settings.micEnabled, settings.micId, settings.micProcessing]);
   useEffect(() => onMediaChanged(() => setMediaEpoch((n) => n + 1)), []);
+
+  // If the active tab isn't available in the current layout, fall back to Program.
+  useEffect(() => {
+    if (!tabs.some((t) => t.id === activeTab)) setActiveTab('program');
+  }, [tabs, activeTab]);
+
+  // Load / release the segmentation model to match the chosen background mode,
+  // so the preview shows exactly the background the recording will bake in.
+  useEffect(() => {
+    if (settings.cameraBackground.mode === 'none' || settings.layout === 'screen') {
+      segmenterRef.current?.close();
+      segmenterRef.current = null;
+      return;
+    }
+    segmenterRef.current ??= createCameraSegmenter();
+  }, [settings.cameraBackground.mode, settings.layout]);
+  useEffect(
+    () => () => {
+      segmenterRef.current?.close();
+      segmenterRef.current = null;
+    },
+    [],
+  );
 
   // Bind the live camera + screen to hidden <video>s that feed the preview canvas.
   useEffect(() => {
@@ -106,6 +151,11 @@ export function PreflightScreen() {
         );
       }
       focusAnim.current.tick(performance.now());
+      const bgActive = s.cameraBackground.mode !== 'none';
+      const seg = segmenterRef.current;
+      if (bgActive && seg && camReady) {
+        seg.push(camReady, camReady.videoWidth, camReady.videoHeight);
+      }
       drawScene(ctx, {
         outW: STAGE_W,
         outH: STAGE_H,
@@ -119,6 +169,8 @@ export function PreflightScreen() {
         camera: camReady
           ? { img: camReady, w: camReady.videoWidth, h: camReady.videoHeight }
           : null,
+        cameraBackground: s.cameraBackground,
+        cameraMask: bgActive && seg ? seg.getMask() : null,
       });
     };
     render();
@@ -221,23 +273,41 @@ export function PreflightScreen() {
         </div>
       </div>
 
-      {/* channel-strip rail */}
+      {/* tabbed control panel — one panel at a time, so it never scrolls */}
       <div className="config-panel">
-        <div className="rail-col">
-          <Module title="Program" no="CH·01">
-            <Segmented
-              ariaLabel="Layout"
-              value={settings.layout}
-              onChange={(layout) => patchSettings({ layout })}
-              options={[
-                { value: 'screen+camera', label: 'Scrn+Cam' },
-                { value: 'screen', label: 'Screen' },
-                { value: 'camera', label: 'Camera' },
-              ]}
-            />
-          </Module>
+        <div className="tab-bar" role="tablist" aria-label="Controls">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === t.id}
+              className={`tab-btn ${activeTab === t.id ? 'on' : ''}`}
+              onClick={() => setActiveTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-          {settings.layout !== 'screen' && (
+        <div className="tab-body">
+          {activeTab === 'program' && (
+            <Module title="Program" no="CH·01">
+              <Segmented
+                ariaLabel="Layout"
+                value={settings.layout}
+                onChange={(layout) => patchSettings({ layout })}
+                options={[
+                  { value: 'screen+camera', label: 'Scrn+Cam' },
+                  { value: 'screen', label: 'Screen' },
+                  { value: 'camera', label: 'Camera' },
+                ]}
+              />
+              <p className="mod-hint">Pick what the take captures. Screen, camera, or both.</p>
+            </Module>
+          )}
+
+          {activeTab === 'camera' && settings.layout !== 'screen' && (
             <Module title="Camera" no="CH·02">
               <SelectField
                 ariaLabel="Camera"
@@ -302,201 +372,248 @@ export function PreflightScreen() {
                   label="Shadow"
                 />
               </div>
-            </Module>
-          )}
-
-          <Module
-            title="Mic"
-            no="CH·03"
-            val={
-              <Switch
-                horizontal
-                checked={settings.micEnabled}
-                onChange={(micEnabled) => patchSettings({ micEnabled })}
-                label="Microphone on"
-              />
-            }
-          >
-            {settings.micEnabled && (
-              <>
-                <SelectField
-                  ariaLabel="Microphone"
-                  value={settings.micId ?? ''}
-                  onChange={(micId) => patchSettings({ micId: micId || null })}
-                  options={[
-                    { value: '', label: 'Default microphone' },
-                    ...devices.mics.map((d) => ({
-                      value: d.deviceId,
-                      label: d.label || 'Microphone',
-                    })),
-                  ]}
-                />
-                <div className="mt-3">
-                  <VuMeter level={micLevel} />
-                  <div className="vu-cap">
-                    <span>−60</span>
-                    <span>−24</span>
-                    <span>−12</span>
-                    <span>0</span>
-                  </div>
-                </div>
-                <div className="sw-row mt-4 px-2">
-                  <Switch
-                    checked={settings.micProcessing.noiseSuppression}
-                    onChange={(v) =>
-                      patchSettings({
-                        micProcessing: { ...settings.micProcessing, noiseSuppression: v },
-                      })
-                    }
-                    label="Denoise"
-                  />
-                  <Switch
-                    checked={settings.micProcessing.echoCancellation}
-                    onChange={(v) =>
-                      patchSettings({
-                        micProcessing: { ...settings.micProcessing, echoCancellation: v },
-                      })
-                    }
-                    label="Echo"
-                  />
-                  <Switch
-                    checked={settings.micProcessing.autoGainControl}
-                    onChange={(v) =>
-                      patchSettings({
-                        micProcessing: { ...settings.micProcessing, autoGainControl: v },
-                      })
-                    }
-                    label="Gain"
+              <div className="mt-4">
+                <span className="ctl-name">Camera background</span>
+                <div className="mt-2">
+                  <Segmented
+                    ariaLabel="Camera background"
+                    value={settings.cameraBackground.mode}
+                    onChange={(mode) => updateCameraBackground({ mode })}
+                    options={[
+                      { value: 'none', label: 'None' },
+                      { value: 'blur', label: 'Blur' },
+                      { value: 'builtin', label: 'Backdrop' },
+                    ]}
                   />
                 </div>
-              </>
-            )}
-          </Module>
-        </div>
-
-        <div className="rail-col">
-          <Module title="Tape" no="OUT">
-            <SelectField
-              ariaLabel="Quality preset"
-              mono
-              value={settings.presetId}
-              onChange={(presetId) => patchSettings({ presetId: presetId as PresetId })}
-              options={Object.values(PRESETS).map((p) => ({ value: p.id, label: p.label }))}
-            />
-            {settings.layout !== 'camera' && (
-              <>
-                <div className="ctl-row mt-4">
-                  <span className="ctl-name">Capture tab / system audio</span>
-                  <Switch
-                    horizontal
-                    checked={settings.captureSystemAudio}
-                    onChange={(captureSystemAudio) => {
-                      patchSettings({ captureSystemAudio });
-                      if (useStore.getState().session.screenReady) {
-                        toast('Audio capture applies the next time you select a screen.');
-                      }
-                    }}
-                    label="Capture tab or system audio"
-                  />
-                </div>
-                {settings.captureSystemAudio && (
-                  <div className="ctl-row mt-2">
-                    <span className="ctl-name">Mute locally on roll</span>
-                    <Switch
-                      horizontal
-                      checked={settings.suppressLocalAudioPlayback}
-                      onChange={(suppressLocalAudioPlayback) =>
-                        patchSettings({ suppressLocalAudioPlayback })
-                      }
-                      label="Mute locally while recording"
+                {settings.cameraBackground.mode === 'blur' && (
+                  <div className="mt-2">
+                    <Fader
+                      label="Blur strength"
+                      value={settings.cameraBackground.blur}
+                      min={CAMERA_BLUR_MIN}
+                      max={CAMERA_BLUR_MAX}
+                      step={1}
+                      onChange={(blur) => updateCameraBackground({ blur })}
+                      format={(v) => `${Math.round(v)}`}
                     />
                   </div>
                 )}
-              </>
-            )}
-          </Module>
+                {settings.cameraBackground.mode === 'builtin' && (
+                  <div className="mt-3">
+                    <CameraBackgroundPicker
+                      value={settings.cameraBackground.builtinId}
+                      onChange={(builtinId) => updateCameraBackground({ builtinId })}
+                    />
+                  </div>
+                )}
+                {settings.cameraBackground.mode !== 'none' && (
+                  <p className="mod-hint">
+                    Your room is replaced live, on-device. Nothing leaves the machine.
+                  </p>
+                )}
+              </div>
+            </Module>
+          )}
 
-          <Module title="Scene" no="CH·04">
-            <BackdropPicker
-              value={settings.frame.backdrop}
-              onChange={(backdrop) => updateFrame({ backdrop })}
-            />
-            <div className="mt-3">
-              <Fader
-                label="Padding"
-                value={settings.frame.pad}
-                min={0}
-                max={PAD_MAX}
-                step={0.005}
-                onChange={(pad) => updateFrame({ pad })}
-                format={(v) => `${Math.round(v * 100)}%`}
-              />
-            </div>
-            <div className="mt-2">
-              <Fader
-                label="Corner radius"
-                value={settings.frame.radius}
-                min={0}
-                max={RADIUS_MAX}
-                step={1}
-                onChange={(radius) => updateFrame({ radius })}
-                format={(v) => `${Math.round(v)} px`}
-              />
-            </div>
-            <div className="ctl-row mt-4">
-              <span className="ctl-name">Drop shadow</span>
-              <Switch
-                horizontal
-                checked={settings.frame.shadow}
-                onChange={(shadow) => updateFrame({ shadow })}
-                label="Drop shadow"
-              />
-            </div>
-            <p className="mod-hint">Padding trades screen pixels for style.</p>
-          </Module>
+          {activeTab === 'mic' && (
+            <Module
+              title="Mic"
+              no="CH·03"
+              val={
+                <Switch
+                  horizontal
+                  checked={settings.micEnabled}
+                  onChange={(micEnabled) => patchSettings({ micEnabled })}
+                  label="Microphone on"
+                />
+              }
+            >
+              {settings.micEnabled && (
+                <>
+                  <SelectField
+                    ariaLabel="Microphone"
+                    value={settings.micId ?? ''}
+                    onChange={(micId) => patchSettings({ micId: micId || null })}
+                    options={[
+                      { value: '', label: 'Default microphone' },
+                      ...devices.mics.map((d) => ({
+                        value: d.deviceId,
+                        label: d.label || 'Microphone',
+                      })),
+                    ]}
+                  />
+                  <div className="mt-3">
+                    <VuMeter level={micLevel} />
+                    <div className="vu-cap">
+                      <span>−60</span>
+                      <span>−24</span>
+                      <span>−12</span>
+                      <span>0</span>
+                    </div>
+                  </div>
+                  <div className="sw-row mt-4 px-2">
+                    <Switch
+                      checked={settings.micProcessing.noiseSuppression}
+                      onChange={(v) =>
+                        patchSettings({
+                          micProcessing: { ...settings.micProcessing, noiseSuppression: v },
+                        })
+                      }
+                      label="Denoise"
+                    />
+                    <Switch
+                      checked={settings.micProcessing.echoCancellation}
+                      onChange={(v) =>
+                        patchSettings({
+                          micProcessing: { ...settings.micProcessing, echoCancellation: v },
+                        })
+                      }
+                      label="Echo"
+                    />
+                    <Switch
+                      checked={settings.micProcessing.autoGainControl}
+                      onChange={(v) =>
+                        patchSettings({
+                          micProcessing: { ...settings.micProcessing, autoGainControl: v },
+                        })
+                      }
+                      label="Gain"
+                    />
+                  </div>
+                </>
+              )}
+            </Module>
+          )}
 
-          <Module title="Focus" no="CH·05">
-            <Segmented
-              ariaLabel="Focus"
-              value={tool}
-              onChange={selectFocusTool}
-              options={[
-                { value: 'off', label: 'Off' },
-                { value: 'zoom', label: 'Punch' },
-                { value: 'spotlight', label: 'Spot' },
-              ]}
-            />
-            <div className="mt-3">
-              <Fader
-                label="Screen zoom"
-                value={focus.mode === 'zoom' ? focusZoomFactor(focus) : 1}
-                min={1}
-                max={FOCUS_ZOOM_MAX}
-                step={0.1}
-                onChange={(z) => punchPreset(z)}
-                format={(v) => `${v.toFixed(1)}×`}
+          {activeTab === 'scene' && (
+            <Module title="Scene" no="CH·04">
+              <BackdropPicker
+                value={settings.frame.backdrop}
+                onChange={(backdrop) => updateFrame({ backdrop })}
               />
-            </div>
-            <div className="sw-row mt-4 px-2">
-              <button type="button" className="btn-s" onClick={() => punchPreset(1.5)}>
-                1.5×
-              </button>
-              <button type="button" className="btn-s" onClick={() => punchPreset(2)}>
-                2×
-              </button>
-              <button
-                type="button"
-                className="btn-s"
-                onClick={() => {
-                  setTool('off');
-                  resetFocus();
-                }}
-              >
-                ⟲ 1×
-              </button>
-            </div>
-            <p className="mod-hint">Drag on the monitor to target a region. 0 or Esc to exit.</p>
-          </Module>
+              <div className="mt-3">
+                <Fader
+                  label="Padding"
+                  value={settings.frame.pad}
+                  min={0}
+                  max={PAD_MAX}
+                  step={0.005}
+                  onChange={(pad) => updateFrame({ pad })}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                />
+              </div>
+              <div className="mt-2">
+                <Fader
+                  label="Corner radius"
+                  value={settings.frame.radius}
+                  min={0}
+                  max={RADIUS_MAX}
+                  step={1}
+                  onChange={(radius) => updateFrame({ radius })}
+                  format={(v) => `${Math.round(v)} px`}
+                />
+              </div>
+              <div className="ctl-row mt-4">
+                <span className="ctl-name">Drop shadow</span>
+                <Switch
+                  horizontal
+                  checked={settings.frame.shadow}
+                  onChange={(shadow) => updateFrame({ shadow })}
+                  label="Drop shadow"
+                />
+              </div>
+              <p className="mod-hint">Padding trades screen pixels for style.</p>
+            </Module>
+          )}
+
+          {activeTab === 'focus' && settings.layout !== 'camera' && (
+            <Module title="Focus" no="CH·05">
+              <Segmented
+                ariaLabel="Focus"
+                value={tool}
+                onChange={selectFocusTool}
+                options={[
+                  { value: 'off', label: 'Off' },
+                  { value: 'zoom', label: 'Punch' },
+                  { value: 'spotlight', label: 'Spot' },
+                ]}
+              />
+              <div className="mt-3">
+                <Fader
+                  label="Screen zoom"
+                  value={focus.mode === 'zoom' ? focusZoomFactor(focus) : 1}
+                  min={1}
+                  max={FOCUS_ZOOM_MAX}
+                  step={0.1}
+                  onChange={(z) => punchPreset(z)}
+                  format={(v) => `${v.toFixed(1)}×`}
+                />
+              </div>
+              <div className="sw-row mt-4 px-2">
+                <button type="button" className="btn-s" onClick={() => punchPreset(1.5)}>
+                  1.5×
+                </button>
+                <button type="button" className="btn-s" onClick={() => punchPreset(2)}>
+                  2×
+                </button>
+                <button
+                  type="button"
+                  className="btn-s"
+                  onClick={() => {
+                    setTool('off');
+                    resetFocus();
+                  }}
+                >
+                  ⟲ 1×
+                </button>
+              </div>
+              <p className="mod-hint">Drag on the monitor to target a region. 0 or Esc to exit.</p>
+            </Module>
+          )}
+
+          {activeTab === 'output' && (
+            <Module title="Output" no="OUT">
+              <SelectField
+                ariaLabel="Quality preset"
+                mono
+                value={settings.presetId}
+                onChange={(presetId) => patchSettings({ presetId: presetId as PresetId })}
+                options={Object.values(PRESETS).map((p) => ({ value: p.id, label: p.label }))}
+              />
+              {settings.layout !== 'camera' && (
+                <>
+                  <div className="ctl-row mt-4">
+                    <span className="ctl-name">Capture tab / system audio</span>
+                    <Switch
+                      horizontal
+                      checked={settings.captureSystemAudio}
+                      onChange={(captureSystemAudio) => {
+                        patchSettings({ captureSystemAudio });
+                        if (useStore.getState().session.screenReady) {
+                          toast('Audio capture applies the next time you select a screen.');
+                        }
+                      }}
+                      label="Capture tab or system audio"
+                    />
+                  </div>
+                  {settings.captureSystemAudio && (
+                    <div className="ctl-row mt-2">
+                      <span className="ctl-name">Mute locally on roll</span>
+                      <Switch
+                        horizontal
+                        checked={settings.suppressLocalAudioPlayback}
+                        onChange={(suppressLocalAudioPlayback) =>
+                          patchSettings({ suppressLocalAudioPlayback })
+                        }
+                        label="Mute locally while recording"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </Module>
+          )}
         </div>
 
         <div className="rec-mod">
