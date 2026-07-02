@@ -55,6 +55,29 @@ export interface FrameSettings {
   shadow: boolean;
 }
 
+/**
+ * Virtual background for the camera / headshot, Zoom/Meet-style. The person is
+ * segmented from their room (per-frame, fully local) and composited over a
+ * blurred version of the room or a code-drawn built-in backdrop. `none` leaves
+ * the raw camera untouched — and is also the graceful fallback whenever
+ * segmentation is unavailable, so a recording never blanks the person out.
+ */
+export type CameraBackgroundMode = 'none' | 'blur' | 'builtin';
+
+/**
+ * Which built-in fills the room when mode is 'builtin'. A string (not a closed
+ * union) because the gallery is registry-driven in `cameraBackgrounds.ts` and
+ * grows over time; unknown ids fall back to a default there.
+ */
+export type CameraBackgroundId = string;
+
+export interface CameraBackground {
+  mode: CameraBackgroundMode;
+  /** Room-blur radius in px at a 1080p-height reference; scaled by outH/1080. */
+  blur: number;
+  builtinId: CameraBackgroundId;
+}
+
 export type FocusMode = 'none' | 'zoom' | 'spotlight';
 
 /**

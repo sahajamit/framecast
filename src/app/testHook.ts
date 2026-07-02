@@ -4,7 +4,7 @@ import { isE2E } from '../library/fsAccess';
 import { useStore } from '../state/store';
 import { updateFocus } from './controller';
 import { DEFAULT_FOCUS } from '../compositor/layout';
-import type { FrameSettings, ScreenFocus } from '../types';
+import type { CameraBackground, FrameSettings, ScreenFocus } from '../types';
 
 interface InspectResult {
   duration: number;
@@ -18,6 +18,7 @@ declare global {
       inspectFile(name: string): Promise<InspectResult>;
       listLibrary(): Promise<string[]>;
       setFrame(patch: Partial<FrameSettings>): void;
+      setCameraBackground(patch: Partial<CameraBackground>): void;
       setFocus(patch: Partial<ScreenFocus>): void;
       sampleTopLeft(name: string): Promise<[number, number, number]>;
       samplePixel(name: string, nx: number, ny: number): Promise<[number, number, number]>;
@@ -86,6 +87,9 @@ export function installTestHook(): void {
     },
     setFrame(patch) {
       useStore.getState().patchFrame(patch);
+    },
+    setCameraBackground(patch) {
+      useStore.getState().patchCameraBackground(patch);
     },
     setFocus(patch) {
       // animate:false so assertions don't race the glide.

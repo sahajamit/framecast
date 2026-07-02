@@ -12,8 +12,11 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'icon-onair.svg'],
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,wasm,woff2}'],
-        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        // tflite: the bundled selfie-segmentation model. The MediaPipe wasm
+        // runtime (~11 MB) is precached too so the camera background works
+        // offline, hence the raised size cap.
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,jpeg,wasm,woff2,tflite}'],
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
       },
       manifest: {
         name: 'framecast',

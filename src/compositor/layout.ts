@@ -1,4 +1,4 @@
-import type { BubbleGeometry, FrameSettings, ScreenFocus } from '../types';
+import type { BubbleGeometry, CameraBackground, FrameSettings, ScreenFocus } from '../types';
 
 export interface RectPx {
   x: number;
@@ -334,6 +334,21 @@ export const DEFAULT_FRAME: FrameSettings = {
   pad: 0.04,
   radius: 12,
   shadow: true,
+};
+
+/** Blur strength bounds for the camera room-blur, in px at the 1080p reference. */
+export const CAMERA_BLUR_MIN = 4;
+export const CAMERA_BLUR_MAX = 40;
+
+/**
+ * Camera background off by default: the raw camera records exactly as before
+ * until the user opts into blur or a built-in from the Camera module.
+ */
+export const DEFAULT_CAMERA_BACKGROUND: CameraBackground = {
+  mode: 'none',
+  blur: 18,
+  // A mid-tone monochrome: instant (no decode) as the first Backdrop pick.
+  builtinId: 'slate',
 };
 
 /** No punch-in: full screen. A take always arms at this. */

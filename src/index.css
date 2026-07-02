@@ -967,11 +967,12 @@ input[type='range'].trim-range:focus-visible::-webkit-slider-thumb {
 }
 
 /* ---------------- preflight layout ---------------- */
-/* Monitor on the left (large, pinned), the channel-strip modules in two columns
-   on the right so nothing scrolls the monitor out of view while you adjust it. */
+/* Monitor on the left (large, pinned); a single tabbed control panel on the
+   right so exactly one group of controls shows at a time and nothing ever
+   scrolls the monitor — or the Roll Tape button — out of view. */
 .preflight-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 680px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   gap: 20px;
   align-items: start;
 }
@@ -980,28 +981,55 @@ input[type='range'].trim-range:focus-visible::-webkit-slider-thumb {
   top: 16px;
 }
 .config-panel {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  align-content: start;
-}
-.config-panel .rec-mod {
-  grid-column: 1 / -1;
-}
-.rail-col {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  align-content: start;
   min-width: 0;
 }
-/* 13-inch laptops / iPad landscape: collapse to one rail (it may scroll, but the
-   monitor stays pinned). */
+/* Tab bar — same slot/pill language as the Segmented control. */
+.tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  background: var(--surface-slot);
+  border-radius: 7px;
+  padding: var(--space-1);
+  box-shadow: var(--shadow-slot);
+}
+.tab-btn {
+  appearance: none;
+  border: 0;
+  flex: 1 1 auto;
+  background: transparent;
+  color: var(--color-ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 9px 6px;
+  border-radius: var(--radius-1);
+  cursor: pointer;
+  transition: color var(--t-ui) var(--ease-out);
+  white-space: nowrap;
+}
+.tab-btn:hover {
+  color: var(--color-ink-1);
+}
+.tab-btn.on {
+  background: var(--grad-module);
+  color: var(--color-ink-1);
+  box-shadow: var(--shadow-module);
+}
+/* Fixed min-height so switching tabs doesn't make the panel (and Roll Tape)
+   jump; sized to the tallest panel so the whole shell fits one viewport. */
+.tab-body {
+  min-height: 360px;
+}
+/* 13-inch laptops / iPad landscape: the panel is already a single column. */
 @media (max-width: 1399px) {
   .preflight-grid {
-    grid-template-columns: minmax(0, 1fr) 336px;
-  }
-  .config-panel {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) 340px;
   }
 }
 /* Narrow: stack the monitor above the controls. */
