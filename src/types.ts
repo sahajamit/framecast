@@ -55,6 +55,25 @@ export interface FrameSettings {
   shadow: boolean;
 }
 
+export type FocusMode = 'none' | 'zoom' | 'spotlight';
+
+/**
+ * Live "punch-in" state for the screen layer, baked into the recording. `cx,cy`
+ * is the region center and `w,h` its size, normalized (0..1) to the screen
+ * content and already constrained to the output aspect ratio. The implied zoom
+ * factor is 1/w (clamped to FOCUS_ZOOM_MAX). `zoom` mode crops to the region and
+ * fills the frame; `spotlight` keeps the full frame but dims everything outside
+ * the region. Distinct from BubbleGeometry.zoom, which is the camera's digital
+ * zoom — this never carries a field literally named `zoom`.
+ */
+export interface ScreenFocus {
+  mode: FocusMode;
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
+}
+
 export type PresetId = '1080p30' | '1080p60' | '1440p30' | '1440p60' | '2160p30';
 
 export interface QualityPreset {

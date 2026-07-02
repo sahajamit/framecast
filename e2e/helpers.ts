@@ -69,7 +69,15 @@ declare global {
         radius?: number;
         shadow?: boolean;
       }): void;
+      setFocus(patch: {
+        mode?: 'none' | 'zoom' | 'spotlight';
+        cx?: number;
+        cy?: number;
+        w?: number;
+        h?: number;
+      }): void;
       sampleTopLeft(name: string): Promise<[number, number, number]>;
+      samplePixel(name: string, nx: number, ny: number): Promise<[number, number, number]>;
     };
   }
 }

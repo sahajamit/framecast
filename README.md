@@ -28,6 +28,7 @@ Built for the daily-video workflow: open a tab, hit record, talk, stop, upload t
 - **Three layouts**: screen + camera bubble, screen only, camera only
 - **The camera bubble**: circle or rounded, draggable in the preview *and live during the take* (position is baked into the video), snap-to-corner, size slider, and a **zoom slider** so you can frame just your head, not your shoulders
 - **Scene framing, baked in live (no editor step)**: wrap the capture in a styled backdrop with padding, rounded corners and a soft shadow, with the camera bubble free to overlap the frame edge for the "breaking the border" look. A curated set of code-drawn backdrops (studio gradients, warm textures, solids, plus a content-aware **blur** of your own screen that auto color-matches every take). Paid tools (Loom, Screen Studio, Cap) only do this in a post editor. framecast bakes it into the recording as you preview it, so the preview *is* the output. On by default, one click back to raw
+- **Live zoom + spotlight, while you record**: punch into a region of your screen so it fills the frame, then glide back out, all baked into the take with no iMovie pass afterward. Steer it from the floating deck (drag a box, click a spot, presets, or scroll), exit with `Esc` / `0`. Or **spotlight** a region (dim everything else) to point without zooming. Because the punch resamples from your Mac's full-resolution capture, a 4x zoom into a terminal stays sharp where post-zoom of an already-compressed video goes soft. Works screen-only, respects reduced-motion
 - **Tab-viewport capture**: sharing a Chrome tab records exactly the page, no omnibox, no browser chrome
 - **Floating control deck**: an always-on-top mini window (Document Picture-in-Picture) with live preview, drag-to-move bubble, mic mute + level meter, pause/resume, timer and stop
 - **Crash-safe direct-to-disk recording**: WebCodecs hardware H.264 muxed into a fragmented MP4, flushed to disk every 2 seconds. A crashed tab leaves a recoverable take, not a lost one
@@ -84,7 +85,7 @@ The e2e suite records real files (Chrome fake camera/mic, auto-selected tab capt
 
 ## Roadmap (phase 2)
 
-Teleprompter in the floating deck · dual-mic mixing / separate tracks · background blur · live zoom (punch into a region mid-take, [issue #6](https://github.com/sahajamit/framecast/issues/6)) · custom backdrop images · GIF export · 9:16 vertical mode · keyframe-snapped instant head-trim · optional Electron wrapper (global hotkeys, full system audio).
+Teleprompter in the floating deck · dual-mic mixing / separate tracks · background blur · auto zoom-on-click / follow-cursor (needs the Electron wrapper, since a web app can't read your cursor over the shared screen) · custom backdrop images · GIF export · 9:16 vertical mode · keyframe-snapped instant head-trim · optional Electron wrapper (global hotkeys, full system audio).
 
 ## License
 

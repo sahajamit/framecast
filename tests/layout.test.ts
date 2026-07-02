@@ -7,13 +7,20 @@ import {
   containRect,
   cornerPosition,
   DEFAULT_BUBBLE,
+  DEFAULT_FOCUS,
+  FOCUS_W_MIN,
+  FOCUS_ZOOM_MAX,
+  focusForZoom,
+  focusZoomFactor,
   frameRadiusPx,
   hitTest,
+  normalizeFocusRect,
   PAD_MAX,
   screenFrameRect,
+  screenSrcRect,
   snapTarget,
 } from '../src/compositor/layout';
-import type { BubbleGeometry } from '../src/types';
+import type { BubbleGeometry, ScreenFocus } from '../src/types';
 
 const OUT_W = 2560;
 const OUT_H = 1440;
@@ -161,6 +168,88 @@ describe('frameRadiusPx', () => {
     expect(frameRadiusPx(12, 1080)).toBeCloseTo(12);
     expect(frameRadiusPx(12, 2160)).toBeCloseTo(24);
     expect(frameRadiusPx(12, 540)).toBeCloseTo(6);
+  });
+});
+
+const SRC_W = 1920;
+const SRC_H = 1080;
+const focus = (p: Partial<ScreenFocus> = {}): ScreenFocus => ({ ...DEFAULT_FOCUS, ...p });
+
+describe('screenSrcRect', () => {
+  it('is the full image at w=h=1 (identity → unchanged output)', () => {
+    expect(screenSrcRect(focus({ w: 1, h: 1 }), SRC_W, SRC_H)).toEqual({
+      sx: 0,
+      sy: 0,
+      sw: SRC_W,
+      sh: SRC_H,
+    });
+  });
+
+  it('crops a centered region', () => {
+    const r = screenSrcRect(focus({ cx: 0.5, cy: 0.5, w: 0.5, h: 0.5 }), SRC_W, SRC_H);
+    expect(r.sw).toBeCloseTo(SRC_W / 2);
+    expect(r.sh).toBeCloseTo(SRC_H / 2);
+    expect(r.sx).toBeCloseTo(SRC_W / 4);
+    expect(r.sy).toBeCloseTo(SRC_H / 4);
+  });
+
+  it('clamps the crop to stay inside the source at a corner', () => {
+    const r = screenSrcRect(focus({ cx: 0, cy: 0, w: 0.5, h: 0.5 }), SRC_W, SRC_H);
+    expect(r.sx).toBe(0);
+    expect(r.sy).toBe(0);
+    expect(r.sx + r.sw).toBeLessThanOrEqual(SRC_W);
+    expect(r.sy + r.sh).toBeLessThanOrEqual(SRC_H);
+  });
+
+  it('caps zoom by clamping w to FOCUS_W_MIN', () => {
+    const r = screenSrcRect(focus({ w: 0.05, h: 0.05 }), SRC_W, SRC_H);
+    expect(r.sw).toBeCloseTo(FOCUS_W_MIN * SRC_W);
+  });
+});
+
+describe('normalizeFocusRect', () => {
+  it('locks a zoom to a square by expanding to the larger side', () => {
+    const f = normalizeFocusRect({ cx: 0.5, cy: 0.5, w: 0.3, h: 0.5 }, 'zoom');
+    expect(f.w).toBeCloseTo(0.5);
+    expect(f.h).toBeCloseTo(0.5);
+    expect(f.mode).toBe('zoom');
+  });
+
+  it('enforces the max-zoom minimum size for a zoom', () => {
+    const f = normalizeFocusRect({ cx: 0.5, cy: 0.5, w: 0.05, h: 0.05 }, 'zoom');
+    expect(f.w).toBeCloseTo(FOCUS_W_MIN);
+    expect(f.h).toBeCloseTo(FOCUS_W_MIN);
+  });
+
+  it('keeps the drawn shape for a spotlight', () => {
+    const f = normalizeFocusRect({ cx: 0.5, cy: 0.5, w: 0.6, h: 0.2 }, 'spotlight');
+    expect(f.w).toBeCloseTo(0.6);
+    expect(f.h).toBeCloseTo(0.2);
+  });
+
+  it('clamps the center so the region stays on screen', () => {
+    const f = normalizeFocusRect({ cx: 1, cy: 1, w: 0.4, h: 0.4 }, 'zoom');
+    expect(f.cx).toBeCloseTo(1 - 0.2);
+    expect(f.cy).toBeCloseTo(1 - 0.2);
+  });
+});
+
+describe('focusForZoom + focusZoomFactor', () => {
+  it('round-trips a zoom factor', () => {
+    const f = focusForZoom(2);
+    expect(f.w).toBeCloseTo(0.5);
+    expect(f.h).toBeCloseTo(0.5);
+    expect(focusZoomFactor(f)).toBeCloseTo(2);
+  });
+
+  it('clamps to the max zoom', () => {
+    expect(focusZoomFactor(focusForZoom(99))).toBeCloseTo(FOCUS_ZOOM_MAX);
+  });
+
+  it('keeps a corner-anchored zoom fully on screen', () => {
+    const f = focusForZoom(4, 0, 0);
+    expect(f.cx).toBeCloseTo(0.125);
+    expect(f.cy).toBeCloseTo(0.125);
   });
 });
 

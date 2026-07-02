@@ -1,4 +1,4 @@
-import type { BubbleGeometry, FrameSettings, LayoutKind } from '../types';
+import type { BubbleGeometry, FrameSettings, LayoutKind, ScreenFocus } from '../types';
 
 export interface CompositorInit {
   type: 'init';
@@ -8,6 +8,7 @@ export interface CompositorInit {
   layout: LayoutKind;
   bubble: BubbleGeometry;
   frame: FrameSettings;
+  focus: ScreenFocus;
   /** Transferred MediaStreamTrackProcessor readables. */
   screen: ReadableStream<VideoFrame> | null;
   camera: ReadableStream<VideoFrame> | null;
@@ -19,6 +20,7 @@ export type ToCompositor =
   | CompositorInit
   | { type: 'bubble'; bubble: BubbleGeometry }
   | { type: 'frame'; frame: FrameSettings }
+  | { type: 'focus'; focus: ScreenFocus; animate: boolean }
   | { type: 'stop' };
 
 export type FromCompositor =

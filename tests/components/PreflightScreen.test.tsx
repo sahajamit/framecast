@@ -15,6 +15,8 @@ vi.mock('../../src/app/controller', () => ({
   toast: vi.fn(),
   updateBubble: vi.fn(),
   updateFrame: vi.fn(),
+  updateFocus: vi.fn(),
+  resetFocus: vi.fn(),
 }));
 
 import { PreflightScreen } from '../../src/app/PreflightScreen';
@@ -63,5 +65,13 @@ describe('PreflightScreen gating', () => {
     expect(screen.getByLabelText('Padding')).toBeInTheDocument();
     expect(screen.getByLabelText('Corner radius')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: /drop shadow/i })).toBeInTheDocument();
+  });
+
+  it('renders the Focus (live zoom) module with its controls', () => {
+    render(<PreflightScreen />);
+    expect(screen.getByText('Focus')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /focus/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Screen zoom')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /punch/i })).toBeInTheDocument();
   });
 });

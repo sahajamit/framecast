@@ -7,10 +7,12 @@ export interface ShortcutHandlers {
   toggleMic?: () => void;
   toggleCamera?: () => void;
   snap?: (corner: SnapCorner) => void;
+  resetFocus?: () => void;
 }
 
 /**
- * Space = pause/resume · S = stop · M = mic mute · C = camera bubble · 1–4 = snap corners.
+ * Space = pause/resume · S = stop · M = mic mute · C = camera bubble · 1–4 = snap
+ * corners · 0 or Esc = exit the screen zoom/spotlight.
  * Registered on the app window and the PiP deck window.
  */
 export function registerShortcuts(win: Window, handlers: ShortcutHandlers): () => void {
@@ -32,6 +34,8 @@ export function registerShortcuts(win: Window, handlers: ShortcutHandlers): () =
       handlers.toggleMic?.();
     } else if (key === 'c') {
       handlers.toggleCamera?.();
+    } else if (key === '0' || key === 'escape') {
+      handlers.resetFocus?.();
     } else if (key >= '1' && key <= '4') {
       const corner = SNAP_CORNERS[Number(key) - 1];
       if (corner) handlers.snap?.(corner);

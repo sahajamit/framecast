@@ -1,7 +1,9 @@
 /// <reference lib="webworker" />
 import { drawScene } from './scene';
+import { FocusAnimator } from './focus';
+import { FOCUS_GLIDE_MS } from './layout';
 import type { FromCompositor, ToCompositor } from './protocol';
-import type { BubbleGeometry, FrameSettings, LayoutKind } from '../types';
+import type { BubbleGeometry, FrameSettings, LayoutKind, ScreenFocus } from '../types';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -14,6 +16,7 @@ let frameIntervalMs = 1000 / 30;
 let layout: LayoutKind = 'screen+camera';
 let bubble: BubbleGeometry | null = null;
 let sceneFrame: FrameSettings | null = null;
+let focus: FocusAnimator | null = null;
 
 let latestScreen: VideoFrame | null = null;
 let latestCamera: VideoFrame | null = null;
@@ -39,6 +42,7 @@ self.onmessage = (event: MessageEvent<ToCompositor>) => {
         msg.layout,
         msg.bubble,
         msg.frame,
+        msg.focus,
         msg.screen,
         msg.camera,
         msg.out,
@@ -51,6 +55,11 @@ self.onmessage = (event: MessageEvent<ToCompositor>) => {
       break;
     case 'frame':
       sceneFrame = msg.frame;
+      dirty = true;
+      scheduleDraw();
+      break;
+    case 'focus':
+      focus?.setTarget(msg.focus, msg.animate ? FOCUS_GLIDE_MS : 0, performance.now());
       dirty = true;
       scheduleDraw();
       break;
@@ -67,6 +76,7 @@ function init(
   initialLayout: LayoutKind,
   initialBubble: BubbleGeometry,
   initialFrame: FrameSettings,
+  initialFocus: ScreenFocus,
   screen: ReadableStream<VideoFrame> | null,
   camera: ReadableStream<VideoFrame> | null,
   out: WritableStream<VideoFrame>,
@@ -77,6 +87,7 @@ function init(
   layout = initialLayout;
   bubble = initialBubble;
   sceneFrame = initialFrame;
+  focus = new FocusAnimator(initialFocus);
   canvas = new OffscreenCanvas(width, height);
   ctx = canvas.getContext('2d', { desynchronized: true });
   if (!ctx) {
@@ -134,13 +145,16 @@ function scheduleDraw(): void {
 }
 
 function draw(): void {
-  if (!ctx || !canvas || !writer || !bubble || !sceneFrame) return;
+  if (!ctx || !canvas || !writer || !bubble || !sceneFrame || !focus) return;
+  // Advance the punch-in glide before composing so this frame reflects it.
+  const animating = focus.tick(performance.now());
   drawScene(ctx, {
     outW,
     outH,
     layout,
     bubble,
     frame: sceneFrame,
+    focus: focus.current,
     screen: latestScreen
       ? { img: latestScreen, w: latestScreen.displayWidth, h: latestScreen.displayHeight }
       : null,
@@ -160,12 +174,19 @@ function draw(): void {
     sentFirstFrame = true;
     post({ type: 'firstFrame' });
   }
+  // Keep the glide running at frame rate even on a static screen (the 1 Hz
+  // heartbeat is too slow). The last frame returns false and we fall back to it.
+  if (animating) {
+    dirty = true;
+    scheduleDraw();
+  }
 }
 
 async function stop(): Promise<void> {
   stopped = true;
   if (heartbeat !== null) clearInterval(heartbeat);
   if (drawTimer !== null) clearTimeout(drawTimer);
+  focus = null;
   latestScreen?.close();
   latestCamera?.close();
   latestScreen = null;

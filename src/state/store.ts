@@ -9,8 +9,9 @@ import type {
   MicProcessing,
   Phase,
   PresetId,
+  ScreenFocus,
 } from '../types';
-import { DEFAULT_BUBBLE, DEFAULT_FRAME } from '../compositor/layout';
+import { DEFAULT_BUBBLE, DEFAULT_FOCUS, DEFAULT_FRAME } from '../compositor/layout';
 
 export interface Settings {
   theme: 'dark' | 'light';
@@ -66,12 +67,15 @@ export interface AppState {
   session: SessionState;
   devices: DevicesState;
   library: LibraryState;
+  /** Live screen punch-in / spotlight. Transient (resets each take), not persisted. */
+  focus: ScreenFocus;
   view: 'record' | 'library';
 
   setView: (view: 'record' | 'library') => void;
   patchSettings: (patch: Partial<Settings>) => void;
   patchBubble: (patch: Partial<BubbleGeometry>) => void;
   patchFrame: (patch: Partial<FrameSettings>) => void;
+  patchScreenFocus: (patch: Partial<ScreenFocus>) => void;
   setPhase: (phase: Phase) => void;
   patchSession: (patch: Partial<SessionState>) => void;
   setDevices: (patch: Partial<DevicesState>) => void;
@@ -113,6 +117,7 @@ export const useStore = create<AppState>()(
       session: INITIAL_SESSION,
       devices: { cams: [], mics: [], audioCodec: null },
       library: { mode: 'folder', dirName: null, connected: false, items: [], recoverable: [] },
+      focus: DEFAULT_FOCUS,
       view: 'record',
 
       setView: (view) => set({ view }),
@@ -126,6 +131,8 @@ export const useStore = create<AppState>()(
         set((state) => ({
           settings: { ...state.settings, frame: { ...state.settings.frame, ...patch } },
         })),
+      patchScreenFocus: (patch) =>
+        set((state) => ({ focus: { ...state.focus, ...patch } })),
       setPhase: (phase) => set((state) => ({ session: { ...state.session, phase } })),
       patchSession: (patch) => set((state) => ({ session: { ...state.session, ...patch } })),
       setDevices: (patch) => set((state) => ({ devices: { ...state.devices, ...patch } })),
