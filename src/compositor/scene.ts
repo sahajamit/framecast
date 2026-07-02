@@ -1,4 +1,4 @@
-import type { BubbleGeometry, FrameSettings, LayoutKind, ScreenFocus } from '../types';
+import type { BubbleGeometry, CameraBackground, FrameSettings, LayoutKind, ScreenFocus } from '../types';
 import {
   bubbleRectPx,
   cameraSrcRect,
@@ -8,8 +8,10 @@ import {
   screenSrcRect,
   SPOTLIGHT_DIM,
 } from './layout';
-import type { Box } from './layout';
-import { paintBackdrop } from './backdrops';
+import type { Box, SrcRect } from './layout';
+import { paintBackdrop, paintCameraBlur } from './backdrops';
+import { paintCameraBackgroundFill } from './cameraBackgrounds';
+import type { MaskSource } from './segmentation';
 
 /** A drawable image plus its intrinsic dimensions (VideoFrame, video element, canvas…). */
 export interface DrawSource {
@@ -27,6 +29,10 @@ export interface SceneState {
   focus: ScreenFocus;
   screen: DrawSource | null;
   camera: DrawSource | null;
+  /** Virtual background for the camera; omitted or 'none' = raw camera. */
+  cameraBackground?: CameraBackground;
+  /** Foreground person mask for the current camera frame, or null when not ready. */
+  cameraMask?: MaskSource | null;
 }
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -45,7 +51,8 @@ const CARD_WELL = '#0a0908';
  * reproduces the original full-bleed output.
  */
 export function drawScene(ctx: Ctx2D, state: SceneState): void {
-  const { outW, outH, layout, bubble, frame, focus, screen, camera } = state;
+  const { outW, outH, layout, bubble, frame, focus, screen, camera, cameraBackground, cameraMask } =
+    state;
 
   paintBackdrop(ctx, frame.backdrop, outW, outH, screen);
 
@@ -53,7 +60,9 @@ export function drawScene(ctx: Ctx2D, state: SceneState): void {
   const radius = Math.min(frameRadiusPx(frame.radius, outH), Math.min(box.w, box.h) / 2);
 
   if (layout === 'camera') {
-    if (camera) drawFramedCamera(ctx, camera, bubble, box, radius, frame.shadow, outH);
+    if (camera) {
+      drawFramedCamera(ctx, camera, bubble, box, radius, frame.shadow, outH, cameraBackground, cameraMask);
+    }
     return;
   }
 
@@ -62,7 +71,7 @@ export function drawScene(ctx: Ctx2D, state: SceneState): void {
   }
 
   if (layout === 'screen+camera' && camera && bubble.visible) {
-    drawBubble(ctx, camera, bubble, outW, outH);
+    drawBubble(ctx, camera, bubble, outW, outH, cameraBackground, cameraMask);
   }
 }
 
@@ -140,15 +149,15 @@ function drawFramedCamera(
   radius: number,
   shadow: boolean,
   outH: number,
+  cameraBackground?: CameraBackground,
+  cameraMask?: MaskSource | null,
 ): void {
   if (shadow) drawCardShadow(ctx, box, radius, outH);
   const src = cameraSrcRect(bubble.zoom, camera.w, camera.h, box.w / box.h);
   ctx.save();
   roundRectPath(ctx, box, radius);
   ctx.clip();
-  ctx.translate(box.x + box.w / 2, box.y + box.h / 2);
-  if (bubble.mirror) ctx.scale(-1, 1);
-  ctx.drawImage(camera.img, src.sx, src.sy, src.sw, src.sh, -box.w / 2, -box.h / 2, box.w, box.h);
+  paintCameraLayer(ctx, box, camera, src, bubble.mirror, cameraBackground, cameraMask);
   ctx.restore();
 }
 
@@ -158,6 +167,8 @@ function drawBubble(
   bubble: BubbleGeometry,
   outW: number,
   outH: number,
+  cameraBackground?: CameraBackground,
+  cameraMask?: MaskSource | null,
 ): void {
   const rect = bubbleRectPx(bubble, outW, outH);
   const src = cameraSrcRect(bubble.zoom, camera.w, camera.h, 1);
@@ -178,9 +189,7 @@ function drawBubble(
   ctx.beginPath();
   ctx.roundRect(rect.x, rect.y, rect.w, rect.h, rect.r);
   ctx.clip();
-  ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
-  if (bubble.mirror) ctx.scale(-1, 1);
-  ctx.drawImage(camera.img, src.sx, src.sy, src.sw, src.sh, -rect.w / 2, -rect.h / 2, rect.w, rect.h);
+  paintCameraLayer(ctx, rect, camera, src, bubble.mirror, cameraBackground, cameraMask);
   ctx.restore();
 
   if (bubble.border) {
@@ -199,4 +208,111 @@ function drawBubble(
     ctx.stroke();
     ctx.restore();
   }
+}
+
+/** A destination rectangle in output px (bubble or framed-camera card). */
+interface DestBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Paints the camera into an already-clipped destination box. With no active
+ * background (mode 'none' or no mask yet) this is the original raw crop, so
+ * behavior and the preview==recording guarantee are unchanged. With a mode and
+ * a ready mask it paints the chosen background, then the segmented person on
+ * top — the whole reason this feature exists.
+ */
+function paintCameraLayer(
+  ctx: Ctx2D,
+  box: DestBox,
+  camera: DrawSource,
+  src: SrcRect,
+  mirror: boolean,
+  bg?: CameraBackground,
+  mask?: MaskSource | null,
+): void {
+  if (!bg || bg.mode === 'none' || !mask) {
+    drawCameraCrop(ctx, box, camera, src, mirror);
+    return;
+  }
+
+  if (bg.mode === 'blur') {
+    paintCameraBlur(ctx, box, camera, src, mirror, bg.blur);
+  } else {
+    paintCameraBackgroundFill(ctx, box, bg.builtinId);
+  }
+  drawMaskedPerson(ctx, box, camera, src, mirror, mask);
+}
+
+/** The original crop: centered, zoom-cropped, optionally mirrored camera fill. */
+function drawCameraCrop(
+  ctx: Ctx2D,
+  box: DestBox,
+  camera: DrawSource,
+  src: SrcRect,
+  mirror: boolean,
+): void {
+  ctx.save();
+  ctx.translate(box.x + box.w / 2, box.y + box.h / 2);
+  if (mirror) ctx.scale(-1, 1);
+  ctx.drawImage(camera.img, src.sx, src.sy, src.sw, src.sh, -box.w / 2, -box.h / 2, box.w, box.h);
+  ctx.restore();
+}
+
+let personScratch: OffscreenCanvas | null = null;
+
+function getPersonScratch(w: number, h: number): OffscreenCanvas | null {
+  if (typeof OffscreenCanvas === 'undefined') return null;
+  if (!personScratch || personScratch.width !== w || personScratch.height !== h) {
+    personScratch = new OffscreenCanvas(w, h);
+  }
+  return personScratch;
+}
+
+/**
+ * Draws just the person over whatever background is already in `box`. The camera
+ * crop is masked in an offscreen scratch (`destination-in` with the foreground
+ * mask, sampled through the identical zoom crop so person and mask align), then
+ * composited into the box with the same mirror as the raw path. The mask upscale
+ * is smoothed, which feathers the edge enough for the fast model. Falls back to
+ * the raw crop if OffscreenCanvas is unavailable (jsdom) — never a blank bubble.
+ */
+function drawMaskedPerson(
+  ctx: Ctx2D,
+  box: DestBox,
+  camera: DrawSource,
+  src: SrcRect,
+  mirror: boolean,
+  mask: MaskSource,
+): void {
+  const sw = Math.max(1, Math.round(box.w));
+  const sh = Math.max(1, Math.round(box.h));
+  const scratch = getPersonScratch(sw, sh);
+  const sctx = scratch?.getContext('2d') ?? null;
+  if (!scratch || !sctx || camera.w === 0 || camera.h === 0) {
+    drawCameraCrop(ctx, box, camera, src, mirror);
+    return;
+  }
+
+  sctx.clearRect(0, 0, sw, sh);
+  sctx.drawImage(camera.img, src.sx, src.sy, src.sw, src.sh, 0, 0, sw, sh);
+
+  // Keep only the foreground: intersect with the mask, cropped by the same zoom
+  // window expressed in mask pixels (the mask is normalized to the camera frame).
+  const mx = mask.w / camera.w;
+  const my = mask.h / camera.h;
+  sctx.save();
+  sctx.globalCompositeOperation = 'destination-in';
+  sctx.imageSmoothingEnabled = true;
+  sctx.drawImage(mask.img, src.sx * mx, src.sy * my, src.sw * mx, src.sh * my, 0, 0, sw, sh);
+  sctx.restore();
+
+  ctx.save();
+  ctx.translate(box.x + box.w / 2, box.y + box.h / 2);
+  if (mirror) ctx.scale(-1, 1);
+  ctx.drawImage(scratch, -box.w / 2, -box.h / 2, box.w, box.h);
+  ctx.restore();
 }

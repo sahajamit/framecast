@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   BubbleGeometry,
+  CameraBackground,
   ExportFormat,
   FrameSettings,
   LayoutKind,
@@ -11,7 +12,13 @@ import type {
   PresetId,
   ScreenFocus,
 } from '../types';
-import { DEFAULT_BUBBLE, DEFAULT_FOCUS, DEFAULT_FRAME } from '../compositor/layout';
+import {
+  DEFAULT_BUBBLE,
+  DEFAULT_CAMERA_BACKGROUND,
+  DEFAULT_FOCUS,
+  DEFAULT_FRAME,
+} from '../compositor/layout';
+import { migrateSettings } from './persistMigrate';
 
 export interface Settings {
   theme: 'dark' | 'light';
@@ -27,6 +34,8 @@ export interface Settings {
   exportFormat: ExportFormat;
   bubble: BubbleGeometry;
   frame: FrameSettings;
+  /** Virtual background for the camera bubble / headshot. */
+  cameraBackground: CameraBackground;
 }
 
 interface SessionState {
@@ -75,6 +84,7 @@ export interface AppState {
   patchSettings: (patch: Partial<Settings>) => void;
   patchBubble: (patch: Partial<BubbleGeometry>) => void;
   patchFrame: (patch: Partial<FrameSettings>) => void;
+  patchCameraBackground: (patch: Partial<CameraBackground>) => void;
   patchScreenFocus: (patch: Partial<ScreenFocus>) => void;
   setPhase: (phase: Phase) => void;
   patchSession: (patch: Partial<SessionState>) => void;
@@ -95,6 +105,7 @@ const DEFAULT_SETTINGS: Settings = {
   exportFormat: 'mp4',
   bubble: DEFAULT_BUBBLE,
   frame: DEFAULT_FRAME,
+  cameraBackground: DEFAULT_CAMERA_BACKGROUND,
 };
 
 const INITIAL_SESSION: SessionState = {
@@ -131,6 +142,13 @@ export const useStore = create<AppState>()(
         set((state) => ({
           settings: { ...state.settings, frame: { ...state.settings.frame, ...patch } },
         })),
+      patchCameraBackground: (patch) =>
+        set((state) => ({
+          settings: {
+            ...state.settings,
+            cameraBackground: { ...state.settings.cameraBackground, ...patch },
+          },
+        })),
       patchScreenFocus: (patch) =>
         set((state) => ({ focus: { ...state.focus, ...patch } })),
       setPhase: (phase) => set((state) => ({ session: { ...state.session, phase } })),
@@ -140,21 +158,22 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'framecast-settings',
-      version: 3,
+      version: 4,
       // window.localStorage explicitly: Node's experimental localStorage
       // global shadows jsdom's working one in component tests.
       storage: createJSONStorage(() => window.localStorage),
       partialize: (state) => ({ settings: state.settings }),
-      migrate: (persisted, version) => {
-        const state = persisted as Partial<Pick<AppState, 'settings'>>;
-        if (version < 2 && state.settings) {
-          state.settings = { ...DEFAULT_SETTINGS, ...state.settings };
-        }
-        // v3 added scene framing — existing installs adopt the framed default.
-        if (version < 3 && state.settings && !state.settings.frame) {
-          state.settings = { ...state.settings, frame: DEFAULT_FRAME };
-        }
-        return state;
+      migrate: (persisted, version) => migrateSettings(persisted, version, DEFAULT_SETTINGS),
+      // Layer persisted settings over the current defaults so a field the stored
+      // blob is missing (e.g. cameraBackground written by an older build, or a
+      // blob left at a higher version from another branch where migrate is
+      // skipped) always falls back to a default instead of being undefined.
+      merge: (persisted, current) => {
+        const p = persisted as Partial<Pick<AppState, 'settings'>> | undefined;
+        return {
+          ...current,
+          settings: { ...current.settings, ...(p?.settings ?? {}) },
+        };
       },
     },
   ),

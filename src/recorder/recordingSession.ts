@@ -5,7 +5,14 @@ import {
   Output,
   StreamTarget,
 } from 'mediabunny';
-import type { BubbleGeometry, FrameSettings, LayoutKind, QualityPreset, ScreenFocus } from '../types';
+import type {
+  BubbleGeometry,
+  CameraBackground,
+  FrameSettings,
+  LayoutKind,
+  QualityPreset,
+  ScreenFocus,
+} from '../types';
 import type { FromCompositor, ToCompositor } from '../compositor/protocol';
 import type { AudioGraph } from '../audio/audioGraph';
 import { AUDIO_BITRATE, assertVideoEncodable, outputDims } from './encoderConfig';
@@ -20,6 +27,7 @@ export interface SessionConfig {
   preset: QualityPreset;
   bubble: BubbleGeometry;
   frame: FrameSettings;
+  cameraBackground: CameraBackground;
   focus: ScreenFocus;
   audioCodec: 'aac' | 'opus' | null;
   libraryDir: FileSystemDirectoryHandle;
@@ -46,6 +54,7 @@ export interface ActiveSession {
   resume(): void;
   setBubble(bubble: BubbleGeometry): void;
   setFrame(frame: FrameSettings): void;
+  setCameraBackground(cameraBackground: CameraBackground): void;
   setFocus(focus: ScreenFocus, animate: boolean): void;
   stop(): Promise<{ fileName: string; handle: FileSystemFileHandle }>;
   /** Tear down and delete the part file (error/cancel path). */
@@ -102,6 +111,7 @@ export async function prepareSession(
     layout: cfg.layout,
     bubble: cfg.bubble,
     frame: cfg.frame,
+    cameraBackground: cfg.cameraBackground,
     focus: cfg.focus,
     screen: screenReadable,
     camera: cameraReadable,
@@ -172,6 +182,10 @@ export async function prepareSession(
 
     setFrame(frame: FrameSettings) {
       worker.postMessage({ type: 'frame', frame } satisfies ToCompositor);
+    },
+
+    setCameraBackground(cameraBackground: CameraBackground) {
+      worker.postMessage({ type: 'cameraBackground', cameraBackground } satisfies ToCompositor);
     },
 
     setFocus(focus: ScreenFocus, animate: boolean) {

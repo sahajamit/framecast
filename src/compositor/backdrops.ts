@@ -1,4 +1,5 @@
 import type { BackdropId } from '../types';
+import type { SrcRect } from './layout';
 
 /**
  * Scene backdrops, painted as code (gradients / static grain / live blur) so
@@ -16,6 +17,14 @@ type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 /** Just enough of a drawable screen source for the blur backdrop. */
 interface ScreenSrc {
   img: CanvasImageSource;
+  w: number;
+  h: number;
+}
+
+/** A drawable box in output pixels (the camera bubble / framed-camera card). */
+interface BoxPx {
+  x: number;
+  y: number;
   w: number;
   h: number;
 }
@@ -195,4 +204,64 @@ function getGrainTile(): OffscreenCanvas | null {
   g.putImageData(img, 0, 0);
   grainTile = c;
   return c;
+}
+
+/* ---------- camera room-blur (behind the segmented headshot) ---------- */
+
+let camBlurScratch: OffscreenCanvas | null = null;
+
+function getCamBlurScratch(w: number, h: number): OffscreenCanvas | null {
+  if (typeof OffscreenCanvas === 'undefined') return null;
+  if (!camBlurScratch || camBlurScratch.width !== w || camBlurScratch.height !== h) {
+    camBlurScratch = new OffscreenCanvas(w, h);
+  }
+  return camBlurScratch;
+}
+
+/**
+ * Blurs the real room: draws the same cropped/mirrored camera region shown in
+ * the bubble, downscaled then upscaled through a blur, so the person (composited
+ * on top) reads against a soft version of their own background. `blurRef` is px
+ * at a 1080p reference; the applied radius scales with the bubble so preview and
+ * recording match. Reuses the downscale-scratch pattern of `paintBlur`.
+ */
+export function paintCameraBlur(
+  ctx: Ctx2D,
+  box: BoxPx,
+  camera: ScreenSrc,
+  src: SrcRect,
+  mirror: boolean,
+  blurRef: number,
+): void {
+  const dh = 120;
+  const dw = Math.max(1, Math.round((dh * box.w) / box.h));
+  const scratch = getCamBlurScratch(dw, dh);
+  let drew = false;
+  if (scratch) {
+    const sctx = scratch.getContext('2d');
+    if (sctx) {
+      sctx.clearRect(0, 0, dw, dh);
+      sctx.save();
+      sctx.translate(dw / 2, dh / 2);
+      if (mirror) sctx.scale(-1, 1);
+      sctx.drawImage(camera.img, src.sx, src.sy, src.sw, src.sh, -dw / 2, -dh / 2, dw, dh);
+      sctx.restore();
+      drew = true;
+    }
+  }
+
+  const radius = Math.max(4, (blurRef * Math.min(box.w, box.h)) / 600);
+  ctx.save();
+  ctx.filter = `blur(${radius}px)`;
+  if (drew && scratch) {
+    ctx.drawImage(scratch, box.x, box.y, box.w, box.h);
+  } else {
+    // OffscreenCanvas unavailable (jsdom): blur the crop directly.
+    ctx.save();
+    ctx.translate(box.x + box.w / 2, box.y + box.h / 2);
+    if (mirror) ctx.scale(-1, 1);
+    ctx.drawImage(camera.img, src.sx, src.sy, src.sw, src.sh, -box.w / 2, -box.h / 2, box.w, box.h);
+    ctx.restore();
+  }
+  ctx.restore();
 }

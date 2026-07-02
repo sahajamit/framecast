@@ -69,6 +69,11 @@ declare global {
         radius?: number;
         shadow?: boolean;
       }): void;
+      setCameraBackground(patch: {
+        mode?: 'none' | 'blur' | 'builtin';
+        blur?: number;
+        builtinId?: string;
+      }): void;
       setFocus(patch: {
         mode?: 'none' | 'zoom' | 'spotlight';
         cx?: number;
