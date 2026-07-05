@@ -13,6 +13,10 @@ import workshopUrl from '../assets/camera-bg/workshop.jpg?url';
 // lofi/neon (teens, twenties) through penthouse/coastal/gallery (thirties,
 // forties) to the ageless cabin. Same craft rules as the originals: mid-tone,
 // soft focus, visually quiet center where the person sits.
+// The signature backdrop: a framecast-branded studio (neon wordmark + boom
+// mic). First in the gallery by design — every take recorded on it carries
+// the brand, and it doubles as the house backdrop for framecast's own videos.
+import framecastUrl from '../assets/camera-bg/framecast.jpg?url';
 import neonUrl from '../assets/camera-bg/neon.jpg?url';
 import lofiUrl from '../assets/camera-bg/lofi.jpg?url';
 import pastelUrl from '../assets/camera-bg/pastel.jpg?url';
@@ -52,6 +56,7 @@ export type CameraBg = ImageBg | SolidBg;
  * Append here to grow the gallery — nothing is ever removed.
  */
 export const CAMERA_BACKGROUNDS: CameraBg[] = [
+  { id: 'framecast', label: 'Framecast studio', kind: 'image', url: framecastUrl },
   { id: 'home', label: 'Home office', kind: 'image', url: homeUrl },
   { id: 'library', label: 'Library', kind: 'image', url: libraryUrl },
   { id: 'studio', label: 'Studio', kind: 'image', url: studioUrl },
