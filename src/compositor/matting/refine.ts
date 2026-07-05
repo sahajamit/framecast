@@ -18,7 +18,11 @@ const VERT = `#version 300 es
 layout(location=0) in vec2 aPos;
 out vec2 vUv;
 void main() {
-  vUv = aPos * 0.5 + 0.5;
+  // V flipped: textures store the image top row at v=0, but the framebuffer
+  // displays bottom-up through drawImage. Sampling with 1-v makes the
+  // published mask canvas read top-down like every other CanvasImageSource
+  // (without it the person cutout is vertically inverted).
+  vUv = vec2(aPos.x, -aPos.y) * 0.5 + 0.5;
   gl_Position = vec4(aPos, 0.0, 1.0);
 }`;
 
