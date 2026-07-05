@@ -9,6 +9,17 @@ import studioUrl from '../assets/camera-bg/studio.jpg?url';
 import cafeUrl from '../assets/camera-bg/cafe.jpg?url';
 import botanicaUrl from '../assets/camera-bg/botanica.jpg?url';
 import workshopUrl from '../assets/camera-bg/workshop.jpg?url';
+// The 2026-07 expansion: seven scenes spanning generational tastes, from
+// lofi/neon (teens, twenties) through penthouse/coastal/gallery (thirties,
+// forties) to the ageless cabin. Same craft rules as the originals: mid-tone,
+// soft focus, visually quiet center where the person sits.
+import neonUrl from '../assets/camera-bg/neon.jpg?url';
+import lofiUrl from '../assets/camera-bg/lofi.jpg?url';
+import pastelUrl from '../assets/camera-bg/pastel.jpg?url';
+import skylineUrl from '../assets/camera-bg/skyline.jpg?url';
+import coastalUrl from '../assets/camera-bg/coastal.jpg?url';
+import galleryUrl from '../assets/camera-bg/gallery.jpg?url';
+import cabinUrl from '../assets/camera-bg/cabin.jpg?url';
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -47,6 +58,13 @@ export const CAMERA_BACKGROUNDS: CameraBg[] = [
   { id: 'cafe', label: 'Cafe', kind: 'image', url: cafeUrl },
   { id: 'botanica', label: 'Botanica', kind: 'image', url: botanicaUrl },
   { id: 'workshop', label: 'Workshop', kind: 'image', url: workshopUrl },
+  { id: 'neon', label: 'Neon loft', kind: 'image', url: neonUrl },
+  { id: 'lofi', label: 'Lofi sunset', kind: 'image', url: lofiUrl },
+  { id: 'pastel', label: 'Daydream', kind: 'image', url: pastelUrl },
+  { id: 'skyline', label: 'Penthouse', kind: 'image', url: skylineUrl },
+  { id: 'coastal', label: 'Coastal', kind: 'image', url: coastalUrl },
+  { id: 'gallery', label: 'Gallery', kind: 'image', url: galleryUrl },
+  { id: 'cabin', label: 'Cabin', kind: 'image', url: cabinUrl },
   { id: 'slate', label: 'Slate', kind: 'solid', colors: ['#4c5661', '#2c343c'] },
   { id: 'sand', label: 'Sand', kind: 'solid', colors: ['#b7a184', '#877053'] },
 ];
