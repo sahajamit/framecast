@@ -53,17 +53,33 @@ for (const f of ORT_FILES) {
 
 mkdirSync(dirname(MODEL_DST), { recursive: true });
 if (!existsSync(MODEL_DST) || statSync(MODEL_DST).size < MODEL_MIN_BYTES) {
+  // A missing model must never block local development (offline clone,
+  // firewalled machine): the runtime demotes high → balanced gracefully.
+  // Deploy builds (CI/Netlify) DO fail hard — shipping without the model
+  // would silently strip the high tier from every user.
+  const deployBuild = !!process.env.CI || !!process.env.NETLIFY;
+  const fail = (msg) => {
+    console.error(`[matting-assets] ${msg}`);
+    if (deployBuild) process.exit(1);
+    console.warn(
+      '[matting-assets] continuing without the RVM model: the High matting tier will demote to Balanced until it is staged (re-run with network access).',
+    );
+  };
   console.log('[matting-assets] downloading RobustVideoMatting fp32 (~15 MB, one-time)…');
-  const res = await fetch(MODEL_URL, { redirect: 'follow' });
-  if (!res.ok) {
-    console.error(`[matting-assets] model download failed: HTTP ${res.status}`);
-    process.exit(1);
+  try {
+    const res = await fetch(MODEL_URL, { redirect: 'follow' });
+    if (!res.ok) {
+      fail(`model download failed: HTTP ${res.status}`);
+    } else {
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length < MODEL_MIN_BYTES) {
+        fail(`model download truncated (${buf.length} bytes)`);
+      } else {
+        writeFileSync(MODEL_DST, buf);
+        console.log(`[matting-assets] staged models/rvm_mobilenetv3_fp32.onnx (${buf.length} bytes)`);
+      }
+    }
+  } catch (err) {
+    fail(`model download failed: ${err?.message ?? err}`);
   }
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length < MODEL_MIN_BYTES) {
-    console.error(`[matting-assets] model download truncated (${buf.length} bytes)`);
-    process.exit(1);
-  }
-  writeFileSync(MODEL_DST, buf);
-  console.log(`[matting-assets] staged models/rvm_mobilenetv3_fp32.onnx (${buf.length} bytes)`);
 }

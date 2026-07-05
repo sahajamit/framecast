@@ -35,6 +35,41 @@ test('records with a built-in camera background without breaking the pipeline', 
   expect(info.duration).toBeGreaterThan(2);
 });
 
+// 1x1 red PNG — enough for the import pipeline (decode → scale → store).
+const TINY_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+test('imports a custom background image, persists it across reload, records with it', async ({
+  page,
+}) => {
+  await freshApp(page);
+  await page.evaluate(() => window.__framecast!.setCameraBackground({ mode: 'builtin' }));
+  await page.getByRole('tab', { name: 'Camera', exact: true }).click();
+
+  await page
+    .getByTestId('camera-bg-import')
+    .setInputFiles({ name: 'my-room.png', mimeType: 'image/png', buffer: TINY_PNG });
+
+  // Imported image appears in the gallery and becomes the active backdrop.
+  const swatch = page.getByRole('button', { name: 'my-room', exact: true });
+  await expect(swatch).toBeVisible();
+  await expect(swatch).toHaveAttribute('aria-pressed', 'true');
+
+  // Survives a reload: stored in IndexedDB, selection persisted in settings.
+  await page.reload();
+  await expect(page.locator('[data-phase="preflight"]')).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('tab', { name: 'Camera', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'my-room', exact: true })).toBeVisible();
+
+  await startRecording(page);
+  await page.waitForTimeout(2000);
+  await stopRecording(page);
+  const { info } = await newestRecording(page);
+  expect(info.video).toBeTruthy();
+});
+
 test('switching to Blur mid-preflight leaves recording healthy', async ({ page }) => {
   await freshApp(page);
   await page.evaluate(() => window.__framecast!.setCameraBackground({ mode: 'blur', blur: 24 }));

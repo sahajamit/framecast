@@ -25,7 +25,12 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: /\/ort\/.*\.(wasm|mjs)$|\/models\/.*\.onnx$/,
-            handler: 'CacheFirst',
+            // StaleWhileRevalidate, NOT CacheFirst: these URLs are stable and
+            // unversioned, so CacheFirst would pin an old ORT runtime forever
+            // after a dependency bump (version-skewed wasm = silent loss of
+            // the high tier). SWR serves offline instantly and self-heals on
+            // the next online load via cheap conditional GETs.
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'framecast-matting-high',
               expiration: { maxEntries: 8 },

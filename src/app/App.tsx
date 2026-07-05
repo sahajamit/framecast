@@ -9,7 +9,7 @@ import {
   refreshRecoverable,
   toast,
 } from './controller';
-import { PreflightScreen } from './PreflightScreen';
+import { HeaderRollTape, PreflightScreen } from './PreflightScreen';
 import { RecordingScreen } from './RecordingScreen';
 import { ReviewScreen } from './ReviewScreen';
 import { LibraryScreen } from './LibraryScreen';
@@ -109,6 +109,7 @@ export function App() {
             </button>
           ))}
         </nav>
+        {view === 'record' && phase === 'preflight' && <HeaderRollTape />}
         <button
           type="button"
           className="lamp-block"

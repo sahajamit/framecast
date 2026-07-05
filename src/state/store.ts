@@ -181,11 +181,26 @@ export const useStore = create<AppState>()(
       // blob is missing (e.g. cameraBackground written by an older build, or a
       // blob left at a higher version from another branch where migrate is
       // skipped) always falls back to a default instead of being undefined.
+      // The nested objects merge per-field too: a shallow spread would let a
+      // persisted cameraBackground that predates a new field (like quality)
+      // wipe out that field's default wholesale.
       merge: (persisted, current) => {
-        const p = persisted as Partial<Pick<AppState, 'settings'>> | undefined;
+        const p = persisted as { settings?: Partial<Settings> } | undefined;
+        const ps: Partial<Settings> = p?.settings ?? {};
         return {
           ...current,
-          settings: { ...current.settings, ...(p?.settings ?? {}) },
+          settings: {
+            ...current.settings,
+            ...ps,
+            micProcessing: { ...current.settings.micProcessing, ...(ps.micProcessing ?? {}) },
+            bubble: { ...current.settings.bubble, ...(ps.bubble ?? {}) },
+            frame: { ...current.settings.frame, ...(ps.frame ?? {}) },
+            cameraBackground: {
+              ...current.settings.cameraBackground,
+              ...(ps.cameraBackground ?? {}),
+            },
+            cameraLighting: { ...current.settings.cameraLighting, ...(ps.cameraLighting ?? {}) },
+          },
         };
       },
     },

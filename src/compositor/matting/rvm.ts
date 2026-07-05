@@ -38,6 +38,7 @@ class RvmInferencer implements Inferencer {
   private rec: [OrtTensor, OrtTensor, OrtTensor, OrtTensor] | null = null;
   private srcBuf: Float32Array | null = null;
   private onReady: (() => void) | null;
+  private consecutiveFailures = 0;
 
   constructor(onReady?: () => void) {
     this.onReady = onReady ?? null;
@@ -102,12 +103,12 @@ class RvmInferencer implements Inferencer {
   async run(input: OffscreenCanvas): Promise<RawMask | null> {
     const { ort, session } = this;
     if (!ort || !session || this.closed) return null;
-    const w = input.width;
-    const h = input.height;
-    const ctx = input.getContext('2d');
-    if (!ctx || w === 0 || h === 0) return null;
-
+    let rec: [OrtTensor, OrtTensor, OrtTensor, OrtTensor] | null = null;
     try {
+      const w = input.width;
+      const h = input.height;
+      const ctx = input.getContext('2d');
+      if (!ctx || w === 0 || h === 0) return null;
       // HWC uint8 → normalized CHW float32.
       const img = ctx.getImageData(0, 0, w, h).data;
       const n = w * h;
@@ -120,7 +121,7 @@ class RvmInferencer implements Inferencer {
         src[2 * n + i] = img[j + 2]! / 255;
       }
 
-      const rec = this.rec ?? this.zeroRec();
+      rec = this.rec ?? this.zeroRec();
       this.rec = null; // ownership moves to the feeds until outputs land
       const ratio = Math.min(1, Math.max(0.25, INTERNAL_TARGET / h));
       const feeds: Record<string, OrtTensor> = {
@@ -148,11 +149,22 @@ class RvmInferencer implements Inferencer {
       ];
       const pha = out['pha'] as OrtTensor;
       const data = pha.data as Float32Array;
+      this.consecutiveFailures = 0;
       return { data, w, h };
     } catch {
-      // One bad frame (device lost, transient EP error): drop it. Repeated
-      // failures surface as a stale mask; the engine's failure watch only
-      // fires on init, so also flag failed if the session died.
+      // One bad frame (transient EP hiccup): drop it and keep the last good
+      // mask. A run of failures means the session is dead (GPU device loss,
+      // driver reset): flag failed so the engine demotes to MediaPipe instead
+      // of freezing the last silhouette into the recording.
+      for (const t of rec ?? []) {
+        try {
+          t.dispose();
+        } catch {
+          // CPU-side zero tensors have nothing to release.
+        }
+      }
+      this.consecutiveFailures++;
+      if (this.consecutiveFailures >= 5) this.failed = true;
       return null;
     }
   }

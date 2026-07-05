@@ -55,6 +55,8 @@ const BY_ID = new Map<string, CameraBg>(CAMERA_BACKGROUNDS.map((b) => [b.id, b])
 
 /** Neutral fill shown while a photo decodes, so the bubble is never transparent. */
 const LOADING_FILL: [string, string] = ['#3a3f45', '#191c1f'];
+/** Shown when a user-imported image was deleted out from under the setting. */
+const MISSING_FILL: [string, string] = ['#4c5661', '#2c343c'];
 
 function resolve(id: CameraBackgroundId): CameraBg {
   return BY_ID.get(id) ?? CAMERA_BACKGROUNDS[CAMERA_BACKGROUNDS.length - 1]!;
@@ -112,11 +114,57 @@ function drawCover(ctx: Ctx2D, img: ImageBitmap, box: BoxPx): void {
   ctx.drawImage(img, box.x + (box.w - w) / 2, box.y + (box.h - h) / 2, w, h);
 }
 
+/* ---------- user-imported images (IndexedDB-backed, per-thread cache) ---------- */
+
+const userBitmaps = new Map<string, ImageBitmap | 'missing'>();
+const userLoading = new Set<string>();
+
 /**
- * Fills `box` (already clipped by the caller) with the chosen built-in: a photo
- * cover-fit, or a mid-tone monochrome gradient.
+ * Same synchronous-paint contract as bitmapFor, but sourced from IndexedDB
+ * (which the recording worker shares with the page): returns the decoded
+ * bitmap if ready, else kicks off a one-time load and reports the interim
+ * state. 'missing' = the image was deleted; callers paint a neutral solid so
+ * a stale persisted selection never strands a black bubble.
+ */
+function userBitmapFor(id: string): ImageBitmap | 'loading' | 'missing' {
+  const cached = userBitmaps.get(id);
+  if (cached) return cached;
+  if (!userLoading.has(id) && typeof createImageBitmap !== 'undefined') {
+    userLoading.add(id);
+    void import('./userBackgrounds')
+      .then((m) => m.getUserBackgroundBlob(id))
+      .then(async (blob) => {
+        userBitmaps.set(id, blob ? await createImageBitmap(blob) : 'missing');
+        userLoading.delete(id);
+      })
+      .catch(() => {
+        userBitmaps.set(id, 'missing');
+        userLoading.delete(id);
+      });
+  }
+  return userBitmaps.get(id) ?? 'loading';
+}
+
+/** Drops a deleted image from this thread's cache (the UI calls it on remove). */
+export function evictUserBitmap(id: string): void {
+  const cached = userBitmaps.get(id);
+  if (cached && cached !== 'missing') cached.close();
+  userBitmaps.delete(id);
+}
+
+/**
+ * Fills `box` (already clipped by the caller) with the chosen backdrop: a
+ * built-in photo cover-fit, a mid-tone monochrome gradient, or a
+ * user-imported image resolved from IndexedDB.
  */
 export function paintCameraBackgroundFill(ctx: Ctx2D, box: BoxPx, id: CameraBackgroundId): void {
+  if (id.startsWith('user:')) {
+    const bmp = userBitmapFor(id);
+    if (bmp === 'loading') paintSolid(ctx, box, LOADING_FILL);
+    else if (bmp === 'missing') paintSolid(ctx, box, MISSING_FILL);
+    else drawCover(ctx, bmp, box);
+    return;
+  }
   const bg = resolve(id);
   if (bg.kind === 'solid') {
     paintSolid(ctx, box, bg.colors);

@@ -139,6 +139,7 @@ class TieredMattingEngine implements MattingEngine {
         if (this.hasPending) void this.run();
       });
       this.kinds.set(inf, kindFor(tier));
+      this.spawnTiers.set(inf, tier);
       if (this.inferencer) this.pendingInferencer = inf;
       else this.inferencer = inf;
       this.watchFailure(inf, tier);
@@ -167,19 +168,51 @@ class TieredMattingEngine implements MattingEngine {
       if (this.closed || (inf !== this.inferencer && inf !== this.pendingInferencer)) return;
       if (inf.ready) return;
       if (inf.failed) {
+        // A tier whose model can't init is off the menu for this session, so
+        // the governor never upshift-retries into a known-bad tier.
+        this.ceilTier = capTier(this.ceilTier, tierBelow(tier) ?? 'floor');
         if (inf === this.pendingInferencer) {
-          this.pendingInferencer = null; // keep the working old tier
+          // Failed background swap (upshift attempt): keep the working model
+          // and roll the tier state back to what is actually running —
+          // otherwise stats/budgets/canvas sizes all describe a phantom tier.
+          this.pendingInferencer = null;
+          const activeTier = this.inferencer ? this.spawnTiers.get(this.inferencer) : undefined;
+          if (activeTier && activeTier !== this.curTier) {
+            this.curTier = activeTier;
+            this.governor.configure(TIER_CONFIG[activeTier], this.lastFrameBudget);
+          }
           return;
         }
-        const below = tierBelow(tier);
-        this.inferencer = null;
-        if (below) this.transitionTo(below);
-        else this.failed = true;
+        this.handleActiveFailure();
         return;
       }
       setTimeout(check, 250);
     };
     setTimeout(check, 250);
+  }
+
+  /**
+   * The serving model died (init failure, or a ready model that stopped
+   * working). Demote from the CURRENT tier — not the spawn-time tier, which
+   * can be stale after a governor demotion and would no-op transitionTo,
+   * stranding the engine with no model, no pending spawn and failed=false.
+   * Below floor there is nothing left: flag failed and drop the published
+   * mask so callers fall back to the raw camera instead of a frozen cutout.
+   */
+  private handleActiveFailure(): void {
+    this.inferencer?.close();
+    this.inferencer = null;
+    this.ready = false;
+    const below = tierBelow(this.curTier);
+    if (below) {
+      this.transitionTo(below);
+      // transitionTo no-ops on same tier and may skip spawning for same-kind
+      // models — but there is no model at all now, so force one.
+      if (!this.inferencer && !this.pendingInferencer) this.spawnInferencer(this.curTier);
+    } else {
+      this.failed = true;
+      this.published = null;
+    }
   }
 
   private transitionTo(tier: MattingTier): void {
@@ -196,6 +229,8 @@ class TieredMattingEngine implements MattingEngine {
 
   /** Which model an inferencer instance is (for swap decisions). */
   private kinds = new WeakMap<Inferencer, InferencerKind>();
+  /** Which tier each instance was spawned for (rollback on failed swaps). */
+  private spawnTiers = new WeakMap<Inferencer, MattingTier>();
   /** Invalidates in-flight async spawns when a newer transition supersedes them. */
   private spawnEpoch = 0;
 
@@ -209,7 +244,10 @@ class TieredMattingEngine implements MattingEngine {
     const iw = Math.max(1, Math.round((ih * srcW) / srcH));
     if (!this.input || this.input.width !== iw || this.input.height !== ih) {
       this.input = new OffscreenCanvas(iw, ih);
-      this.inputCtx = this.input.getContext('2d', { willReadFrequently: false });
+      // willReadFrequently: the high tier reads this canvas back with
+      // getImageData every inference; a GPU-backed canvas would stall the
+      // pipeline ~1-4ms per readback, exactly the budget the governor watches.
+      this.inputCtx = this.input.getContext('2d', { willReadFrequently: true });
     }
     const gh = cfg.guideHeight;
     const gw = Math.max(1, Math.round((gh * srcW) / srcH));
@@ -254,16 +292,26 @@ class TieredMattingEngine implements MattingEngine {
     }
     this.lastInferStart = now;
 
-    const raw = await inf.run(this.input);
-    if (!this.closed && raw) {
-      // The first inferences after a model (re)load include shader compiles /
-      // graph warm-up — orders of magnitude above steady state. Feeding them
-      // to the governor would demote a perfectly capable tier instantly.
-      this.inferSinceSwap++;
-      if (this.inferSinceSwap > 2) this.governor.noteInfer(performance.now() - now);
-      this.publish(raw);
+    try {
+      const raw = await inf.run(this.input);
+      if (!this.closed && raw) {
+        // The first inferences after a model (re)load include shader compiles /
+        // graph warm-up — orders of magnitude above steady state. Feeding them
+        // to the governor would demote a perfectly capable tier instantly.
+        this.inferSinceSwap++;
+        if (this.inferSinceSwap > 2) this.governor.noteInfer(performance.now() - now);
+        this.publish(raw);
+      } else if (!this.closed && inf.failed && inf === this.inferencer) {
+        // A model that died AFTER becoming ready (e.g. WebGPU device loss):
+        // demote rather than serving the last mask as a frozen cutout forever.
+        this.handleActiveFailure();
+      }
+    } catch {
+      // An inferencer broke its never-rejects contract — never let that wedge
+      // the busy flag (which would silently disable matting for good).
+    } finally {
+      this.busy = false;
     }
-    this.busy = false;
     if (this.hasPending && !this.closed) void this.run();
   }
 

@@ -41,6 +41,12 @@ function ensureWasmLoaderGlobal(): Promise<void> {
     .then((r) => r.text())
     .then((src) => {
       (0, eval)(src);
+    })
+    .catch((err: unknown) => {
+      // Never cache a rejection: a transient fetch failure must not poison
+      // every future init (tier demotions, engine rebuilds) for the session.
+      loaderReady = null;
+      throw err;
     });
   return loaderReady;
 }

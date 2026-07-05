@@ -36,13 +36,15 @@ describe('emaBlend — motion-aware temporal smoothing', () => {
 });
 
 describe('shapeToBytes — sigmoid confidence shaping', () => {
-  it('keeps decisive values decisive and the midpoint neutral', () => {
+  it('maps the endpoints exactly (0 → 0, 1 → 255) and the midpoint neutral', () => {
     const src = new Float32Array([0, 0.5, 1]);
     const out = new Uint8Array(3);
     shapeToBytes(src, out);
-    expect(out[0]).toBeLessThan(4);
-    expect(out[1]).toBe(128); // sigmoid(0) = 0.5
-    expect(out[2]).toBeGreaterThan(251);
+    // Exact endpoints: anything else bleeds the raw room through backdrops
+    // (background alpha > 0) or makes the person translucent (core < 255).
+    expect(out[0]).toBe(0);
+    expect([127, 128]).toContain(out[1]); // fp rounding lands on either side
+    expect(out[2]).toBe(255);
   });
 
   it('compresses the uncertain band toward the edges', () => {

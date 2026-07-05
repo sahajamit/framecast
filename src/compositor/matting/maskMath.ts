@@ -44,10 +44,19 @@ export function emaBlend(
  * Shapes confidence through a sigmoid centered at 0.5 and quantizes to bytes
  * for texture upload / ImageData. Values already near 0/1 barely move; the
  * uncertain middle is compressed toward a decisive edge.
+ *
+ * The sigmoid is renormalized so confidence 0 and 1 map to EXACTLY 0 and 255
+ * (the raw curve plateaus at ~2 and ~253, which would blend ~1% of the real
+ * room over every backdrop and make the person's core faintly translucent —
+ * v1 clamped these endpoints and so do we).
  */
 export function shapeToBytes(src: Float32Array, out: Uint8ClampedArray | Uint8Array, k: number = SHAPE_K): void {
+  const lo = 1 / (1 + Math.exp(k * 0.5));
+  const hi = 1 / (1 + Math.exp(-k * 0.5));
+  const scale = 255 / (hi - lo);
   for (let i = 0; i < src.length; i++) {
     const s = 1 / (1 + Math.exp(-k * (src[i]! - 0.5)));
-    out[i] = (s * 255 + 0.5) | 0;
+    const v = ((s - lo) * scale + 0.5) | 0;
+    out[i] = v < 0 ? 0 : v > 255 ? 255 : v;
   }
 }
