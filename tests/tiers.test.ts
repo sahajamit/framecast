@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   capTier,
+  HIGH_TIER_ENABLED,
   pickTier,
   QualityGovernor,
   TIER_CONFIG,
   tierAbove,
   tierBelow,
 } from '../src/compositor/matting/tiers';
+
+// While the RVM/WebGPU tier is gated off (ort-web recurrent-path bug, see
+// tiers.ts), WebGPU devices land on balanced; these expectations flip
+// automatically when the flag is re-enabled.
+const WEBGPU_TIER = HIGH_TIER_ENABLED ? 'high' : 'balanced';
 
 describe('tier ordering', () => {
   it('walks down high → balanced → lite → floor → null', () => {
@@ -31,11 +37,12 @@ describe('pickTier — capability × quality matrix', () => {
   const cpu = { webgpu: false, webgl2: false };
 
   it('auto follows capability', () => {
-    expect(pickTier('auto', webgpu)).toBe('high');
+    expect(pickTier('auto', webgpu)).toBe(WEBGPU_TIER);
     expect(pickTier('auto', webgl)).toBe('balanced');
     expect(pickTier('auto', cpu)).toBe('lite');
   });
   it('high degrades to what the device has', () => {
+    expect(pickTier('high', webgpu)).toBe(WEBGPU_TIER);
     expect(pickTier('high', webgl)).toBe('balanced');
     expect(pickTier('high', cpu)).toBe('lite');
   });

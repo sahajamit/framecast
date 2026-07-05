@@ -83,7 +83,12 @@ declare global {
         h?: number;
       }): void;
       sampleTopLeft(name: string): Promise<[number, number, number]>;
-      samplePixel(name: string, nx: number, ny: number): Promise<[number, number, number]>;
+      samplePixel(
+        name: string,
+        nx: number,
+        ny: number,
+        atSec?: number,
+      ): Promise<[number, number, number]>;
     };
   }
 }

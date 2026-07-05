@@ -25,6 +25,7 @@ import {
   type MattingEngine,
 } from '../compositor/matting/engine';
 import type { MattingStats } from '../compositor/matting/types';
+import { HIGH_TIER_ENABLED } from '../compositor/matting/tiers';
 import type { CameraMattingQuality } from '../types';
 import { isSegDbg } from '../ui/debug';
 import {
@@ -520,7 +521,11 @@ export function PreflightScreen() {
                           onChange={(quality) => updateCameraBackground({ quality })}
                           options={[
                             { value: 'auto', label: 'Auto' },
-                            { value: 'high', label: 'High' },
+                            // High reappears when the RVM/WebGPU tier is
+                            // re-enabled (see tiers.ts HIGH_TIER_ENABLED).
+                            ...(HIGH_TIER_ENABLED
+                              ? [{ value: 'high' as const, label: 'High' }]
+                              : []),
                             { value: 'balanced', label: 'Balanced' },
                             { value: 'lite', label: 'Lite' },
                           ]}

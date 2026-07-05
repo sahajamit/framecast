@@ -27,6 +27,19 @@ export function detectCapabilities(): Capabilities {
   return { webgpu, webgl2 };
 }
 
+/**
+ * High tier (RVM on onnxruntime-web WebGPU) is DISABLED pending an upstream
+ * fix: ort-web 1.27.0's WebGPU EP mis-executes RVM's recurrent path. Probed
+ * on Apple Silicon 2026-07-05 with a real face: frame-0 alpha mass is ~half
+ * of the (correct, stable) wasm EP result, and feeding the recurrent state
+ * back decays pha mean 0.08 → 0.004 within 60 frames — the person literally
+ * fades out of the recording (the wasm EP holds 0.1503 ± 0.0003 over the
+ * same input). All plumbing (rvm.ts, tier machinery, assets) stays; flip
+ * this flag after validating a newer onnxruntime-web against the pha-decay
+ * probe before trusting it with recordings again.
+ */
+export const HIGH_TIER_ENABLED = false;
+
 const ORDER: MattingTier[] = ['high', 'balanced', 'lite', 'floor'];
 
 export function tierBelow(tier: MattingTier): MattingTier | null {
@@ -55,11 +68,10 @@ export function pickTier(
   caps: Capabilities,
   maxTier: MattingTier = 'high',
 ): MattingTier {
+  const webgpuTier: MattingTier = HIGH_TIER_ENABLED ? 'high' : 'balanced';
   let tier: MattingTier;
-  if (quality === 'auto') {
-    tier = caps.webgpu ? 'high' : caps.webgl2 ? 'balanced' : 'lite';
-  } else if (quality === 'high') {
-    tier = caps.webgpu ? 'high' : caps.webgl2 ? 'balanced' : 'lite';
+  if (quality === 'auto' || quality === 'high') {
+    tier = caps.webgpu ? webgpuTier : caps.webgl2 ? 'balanced' : 'lite';
   } else if (quality === 'balanced') {
     tier = caps.webgl2 ? 'balanced' : 'lite';
   } else {
