@@ -30,9 +30,13 @@
   --bevel-bot:         rgba(0,0,0,0.50);
 
   /* ---- ink hierarchy · cream silkscreen ---- */
+  /* Readability revision 2026-07-05: ink-2/ink-3 lifted (same warm hue,
+     higher lightness) — the original values fell under ~4.5:1 at the tiny
+     mono sizes used for knob captions, unselected tabs and header readouts.
+     Hierarchy (ink > ink-2 > ink-3) is preserved. */
   --color-ink:    #f0e8d8;
-  --color-ink-2:  #a89e8c;
-  --color-ink-3:  #756c5c;
+  --color-ink-2:  #c6bcaa;
+  --color-ink-3:  #9d9384;
 
   /* ---- interactive accent · LED green (never red) ---- */
   --color-accent:          oklch(0.82 0.17 145);
@@ -151,8 +155,8 @@
   --bevel-bot:         rgba(42,37,30,0.18);
 
   --color-ink:    #26211a;
-  --color-ink-2:  #5d564a;
-  --color-ink-3:  #6f6757;
+  --color-ink-2:  #524b3f;
+  --color-ink-3:  #5f574a;
 
   --color-accent:          oklch(0.50 0.13 145);
   --color-accent-strong:   oklch(0.43 0.13 145);
