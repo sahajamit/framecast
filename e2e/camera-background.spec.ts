@@ -10,6 +10,16 @@ import { freshApp, newestRecording, startRecording, stopRecording } from './help
  * manual, real-hardware check (see issue #9), not something a fake camera can
  * meaningfully assert.
  */
+test('page is cross-origin isolated (COOP/COEP), enabling threaded WASM', async ({ page }) => {
+  // v2 (issue #11): the CPU segmentation tier relies on SharedArrayBuffer,
+  // which only exists under cross-origin isolation. Headers live in
+  // netlify.toml (prod) and vite.config.ts (dev/preview); this guards both
+  // against silent drift and against a future asset that breaks COEP.
+  await freshApp(page);
+  expect(await page.evaluate(() => window.crossOriginIsolated)).toBe(true);
+  expect(await page.evaluate(() => typeof SharedArrayBuffer)).toBe('function');
+});
+
 test('records with a built-in camera background without breaking the pipeline', async ({ page }) => {
   await freshApp(page);
   await page.evaluate(() =>

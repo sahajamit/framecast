@@ -18,7 +18,13 @@ import {
 } from './controller';
 import { drawScene } from '../compositor/scene';
 import { FocusAnimator } from '../compositor/focus';
-import { createCameraSegmenter, type CameraSegmenter } from '../compositor/segmentation';
+import {
+  createMattingEngine,
+  effectiveCameraBackground,
+  type MattingEngine,
+} from '../compositor/matting/engine';
+import type { MattingStats } from '../compositor/matting/types';
+import { isSegDbg } from '../ui/debug';
 import {
   BUBBLE_MAX_SIZE,
   BUBBLE_MIN_SIZE,
@@ -72,8 +78,9 @@ export function PreflightScreen() {
   const screenVideoRef = useRef<HTMLVideoElement>(null);
   const focusAnim = useRef(new FocusAnimator(DEFAULT_FOCUS));
   const lastFocusTarget = useRef(DEFAULT_FOCUS);
-  const segmenterRef = useRef<CameraSegmenter | null>(null);
+  const segmenterRef = useRef<MattingEngine | null>(null);
   const [micLevel, setMicLevel] = useState(0);
+  const [matting, setMatting] = useState<MattingStats | null>(null);
   const [tool, setTool] = useState<FocusTool>('off');
   const [activeTab, setActiveTab] = useState<TabId>('program');
   const [, setMediaEpoch] = useState(0);
@@ -105,16 +112,24 @@ export function PreflightScreen() {
     if (!tabs.some((t) => t.id === activeTab)) setActiveTab('program');
   }, [tabs, activeTab]);
 
-  // Load / release the segmentation model to match the chosen background mode,
+  // Load / release the matting engine to match the chosen background mode,
   // so the preview shows exactly the background the recording will bake in.
+  // A quality change rebuilds the engine. The preview caps itself at the
+  // balanced tier: the High-tier matting model runs in the recording worker
+  // only (plan Q6), so preflight edges are representative, the recording's
+  // strictly equal or better.
   useEffect(() => {
     if (settings.cameraBackground.mode === 'none' || settings.layout === 'screen') {
       segmenterRef.current?.close();
       segmenterRef.current = null;
       return;
     }
-    segmenterRef.current ??= createCameraSegmenter();
-  }, [settings.cameraBackground.mode, settings.layout]);
+    segmenterRef.current?.close();
+    segmenterRef.current = createMattingEngine({
+      quality: settings.cameraBackground.quality,
+      maxTier: 'balanced',
+    });
+  }, [settings.cameraBackground.mode, settings.cameraBackground.quality, settings.layout]);
   useEffect(
     () => () => {
       segmenterRef.current?.close();
@@ -122,6 +137,19 @@ export function PreflightScreen() {
     },
     [],
   );
+
+  // Live matting tier readout (and the ?dbg=seg overlay) next to the Quality
+  // control, so an auto-downshift is visible instead of silent.
+  useEffect(() => {
+    if (settings.cameraBackground.mode === 'none' || settings.layout === 'screen') {
+      setMatting(null);
+      return;
+    }
+    const tick = setInterval(() => {
+      setMatting(segmenterRef.current?.stats() ?? null);
+    }, 500);
+    return () => clearInterval(tick);
+  }, [settings.cameraBackground.mode, settings.layout]);
 
   // Bind the live camera + screen to hidden <video>s that feed the preview canvas.
   useEffect(() => {
@@ -167,6 +195,7 @@ export function PreflightScreen() {
       if (bgActive && seg && camReady) {
         seg.push(camReady, camReady.videoWidth, camReady.videoHeight);
       }
+      const drawStart = performance.now();
       drawScene(ctx, {
         outW: STAGE_W,
         outH: STAGE_H,
@@ -180,10 +209,14 @@ export function PreflightScreen() {
         camera: camReady
           ? { img: camReady, w: camReady.videoWidth, h: camReady.videoHeight }
           : null,
-        cameraBackground: s.cameraBackground,
+        cameraBackground:
+          bgActive && seg ? effectiveCameraBackground(s.cameraBackground, seg.tier) : s.cameraBackground,
         cameraMask: bgActive && seg ? seg.getMask() : null,
+        cameraLightWrap:
+          bgActive && !!seg && (seg.tier === 'high' || seg.tier === 'balanced'),
         cameraLighting: s.cameraLighting,
       });
+      if (bgActive && seg) seg.noteDrawTime(performance.now() - drawStart, 33.3);
     };
     render();
     return () => cancelAnimationFrame(raf);
@@ -260,6 +293,13 @@ export function PreflightScreen() {
         </div>
         <div className="stage force-dark" style={{ cursor, touchAction: 'none' }} {...handlers}>
           <canvas ref={canvasRef} width={STAGE_W} height={STAGE_H} />
+          {isSegDbg() && matting && (
+            <div className="seg-dbg">
+              seg {matting.tier}
+              {matting.demoted ? ' (demoted)' : ''} · infer {matting.inferMs.toFixed(1)}ms ·
+              refine {matting.refineMs.toFixed(1)}ms · {matting.inferFps.toFixed(0)}fps
+            </div>
+          )}
           {marquee && (
             <div
               className="focus-marquee"
@@ -420,9 +460,37 @@ export function PreflightScreen() {
                   </div>
                 )}
                 {settings.cameraBackground.mode !== 'none' && (
-                  <p className="mod-hint">
-                    Your room is replaced live, on-device. Nothing leaves the machine.
-                  </p>
+                  <>
+                    <div className="mt-3">
+                      <div className="ctl-row">
+                        <span className="ctl-name">Quality</span>
+                        {matting && (
+                          <span className="ctl-val" title="Live matting tier">
+                            {matting.demoted ? '▾ ' : ''}
+                            {matting.tier.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2">
+                        <Segmented
+                          ariaLabel="Matting quality"
+                          value={settings.cameraBackground.quality}
+                          onChange={(quality) => updateCameraBackground({ quality })}
+                          options={[
+                            { value: 'auto', label: 'Auto' },
+                            { value: 'high', label: 'High' },
+                            { value: 'balanced', label: 'Balanced' },
+                            { value: 'lite', label: 'Lite' },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                    <p className="mod-hint">
+                      Your room is replaced live, on-device. Nothing leaves the machine. Auto
+                      picks the best quality this device sustains and steps down before a take
+                      ever stutters.
+                    </p>
+                  </>
                 )}
               </div>
 

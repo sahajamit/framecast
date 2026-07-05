@@ -27,5 +27,12 @@ export function migrateSettings(persisted: unknown, version: number, defaults: S
   if (version < 5 && state.settings && !state.settings.cameraLighting) {
     state.settings = { ...state.settings, cameraLighting: DEFAULT_CAMERA_LIGHTING };
   }
+  // v6 added matting quality to the camera background (issue #11).
+  if (version < 6 && state.settings?.cameraBackground && !state.settings.cameraBackground.quality) {
+    state.settings = {
+      ...state.settings,
+      cameraBackground: { ...state.settings.cameraBackground, quality: 'auto' },
+    };
+  }
   return state;
 }

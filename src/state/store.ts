@@ -171,7 +171,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'framecast-settings',
-      version: 5,
+      version: 6,
       // window.localStorage explicitly: Node's experimental localStorage
       // global shadows jsdom's working one in component tests.
       storage: createJSONStorage(() => window.localStorage),

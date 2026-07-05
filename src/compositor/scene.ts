@@ -19,7 +19,7 @@ import type { Box, SrcRect } from './layout';
 import { paintBackdrop, paintCameraBlur } from './backdrops';
 import { paintCameraBackgroundFill } from './cameraBackgrounds';
 import { applyCameraGrade } from './lighting';
-import type { MaskSource } from './segmentation';
+import type { MaskSource } from './matting/types';
 
 /** A drawable image plus its intrinsic dimensions (VideoFrame, video element, canvas…). */
 export interface DrawSource {
@@ -41,6 +41,12 @@ export interface SceneState {
   cameraBackground?: CameraBackground;
   /** Foreground person mask for the current camera frame, or null when not ready. */
   cameraMask?: MaskSource | null;
+  /**
+   * Light-wrap: backdrop colour bleeding into the person's edge band so the
+   * composite reads as one scene, not a sticker. Set by the callers from the
+   * matting tier (high/balanced only) — never a user-facing control.
+   */
+  cameraLightWrap?: boolean;
   /** Colour grade for the camera; omitted or 'off' = ungraded camera. */
   cameraLighting?: CameraLighting | null;
 }
@@ -72,6 +78,7 @@ export function drawScene(ctx: Ctx2D, state: SceneState): void {
     camera,
     cameraBackground,
     cameraMask,
+    cameraLightWrap,
     cameraLighting,
   } = state;
 
@@ -93,6 +100,7 @@ export function drawScene(ctx: Ctx2D, state: SceneState): void {
         cameraBackground,
         cameraMask,
         cameraLighting,
+        cameraLightWrap,
       );
     }
     return;
@@ -103,7 +111,17 @@ export function drawScene(ctx: Ctx2D, state: SceneState): void {
   }
 
   if (layout === 'screen+camera' && camera && bubble.visible) {
-    drawBubble(ctx, camera, bubble, outW, outH, cameraBackground, cameraMask, cameraLighting);
+    drawBubble(
+      ctx,
+      camera,
+      bubble,
+      outW,
+      outH,
+      cameraBackground,
+      cameraMask,
+      cameraLighting,
+      cameraLightWrap,
+    );
   }
 }
 
@@ -184,13 +202,24 @@ function drawFramedCamera(
   cameraBackground?: CameraBackground,
   cameraMask?: MaskSource | null,
   cameraLighting?: CameraLighting | null,
+  cameraLightWrap?: boolean,
 ): void {
   if (shadow) drawCardShadow(ctx, box, radius, outH);
   const src = cameraSrcRect(bubble.zoom, camera.w, camera.h, box.w / box.h);
   ctx.save();
   roundRectPath(ctx, box, radius);
   ctx.clip();
-  paintCameraLayer(ctx, box, camera, src, bubble.mirror, cameraBackground, cameraMask, cameraLighting);
+  paintCameraLayer(
+    ctx,
+    box,
+    camera,
+    src,
+    bubble.mirror,
+    cameraBackground,
+    cameraMask,
+    cameraLighting,
+    cameraLightWrap,
+  );
   ctx.restore();
 }
 
@@ -203,6 +232,7 @@ function drawBubble(
   cameraBackground?: CameraBackground,
   cameraMask?: MaskSource | null,
   cameraLighting?: CameraLighting | null,
+  cameraLightWrap?: boolean,
 ): void {
   const rect = bubbleRectPx(bubble, outW, outH);
   const src = cameraSrcRect(bubble.zoom, camera.w, camera.h, 1);
@@ -223,7 +253,17 @@ function drawBubble(
   ctx.beginPath();
   ctx.roundRect(rect.x, rect.y, rect.w, rect.h, rect.r);
   ctx.clip();
-  paintCameraLayer(ctx, rect, camera, src, bubble.mirror, cameraBackground, cameraMask, cameraLighting);
+  paintCameraLayer(
+    ctx,
+    rect,
+    camera,
+    src,
+    bubble.mirror,
+    cameraBackground,
+    cameraMask,
+    cameraLighting,
+    cameraLightWrap,
+  );
   ctx.restore();
 
   if (bubble.border) {
@@ -270,15 +310,18 @@ function paintCameraLayer(
   bg?: CameraBackground,
   mask?: MaskSource | null,
   lighting?: CameraLighting | null,
+  lightWrap?: boolean,
 ): void {
   if (!bg || bg.mode === 'none' || !mask) {
     drawCameraCrop(ctx, box, camera, src, mirror);
   } else if (bg.mode === 'blur') {
+    // No wrap on blur: the blurred room already blends into the edge naturally.
     paintCameraBlur(ctx, box, camera, src, mirror, bg.blur);
     drawMaskedPerson(ctx, box, camera, src, mirror, mask);
   } else {
     paintCameraBackgroundFill(ctx, box, bg.builtinId);
     drawMaskedPerson(ctx, box, camera, src, mirror, mask);
+    if (lightWrap) paintLightWrap(ctx, box, camera, src, mirror, mask, bg.builtinId);
   }
   applyCameraGrade(ctx, box, lighting);
 }
@@ -350,5 +393,76 @@ function drawMaskedPerson(
   ctx.translate(box.x + box.w / 2, box.y + box.h / 2);
   if (mirror) ctx.scale(-1, 1);
   ctx.drawImage(scratch, -box.w / 2, -box.h / 2, box.w, box.h);
+  ctx.restore();
+}
+
+/** Wrap bleed strength; subtle by design ("sits in the scene", not "glows"). */
+const WRAP_ALPHA = 0.35;
+
+let wrapScratch: OffscreenCanvas | null = null;
+
+function getWrapScratch(w: number, h: number): OffscreenCanvas | null {
+  if (typeof OffscreenCanvas === 'undefined') return null;
+  if (!wrapScratch || wrapScratch.width !== w || wrapScratch.height !== h) {
+    wrapScratch = new OffscreenCanvas(w, h);
+  }
+  return wrapScratch;
+}
+
+/**
+ * Light-wrap: a thin band of backdrop colour bled additively over the person's
+ * edge, the trick compositors use to make a matted subject read as lit by the
+ * scene behind them. Built entirely from the mask: blur(mask) minus mask gives
+ * an edge ring in display space (same crop + mirror as the person), the ring
+ * is tinted with the backdrop fill, then added on top at low alpha. Sizes are
+ * fractions of the box, so preview == recording (invariant #9). Skipped
+ * wholesale when OffscreenCanvas is missing — never load-bearing.
+ */
+function paintLightWrap(
+  ctx: Ctx2D,
+  box: DestBox,
+  camera: DrawSource,
+  src: SrcRect,
+  mirror: boolean,
+  mask: MaskSource,
+  builtinId: string,
+): void {
+  const sw = Math.max(1, Math.round(box.w));
+  const sh = Math.max(1, Math.round(box.h));
+  const scratch = getWrapScratch(sw, sh);
+  const sctx = scratch?.getContext('2d') ?? null;
+  if (!scratch || !sctx || camera.w === 0 || camera.h === 0) return;
+
+  const r = Math.max(2, sh * 0.02);
+  const mx = mask.w / camera.w;
+  const my = mask.h / camera.h;
+  const sx = src.sx * mx;
+  const sy = src.sy * my;
+  const sWidth = src.sw * mx;
+  const sHeight = src.sh * my;
+
+  sctx.clearRect(0, 0, sw, sh);
+  sctx.save();
+  sctx.translate(sw / 2, sh / 2);
+  if (mirror) sctx.scale(-1, 1);
+  // Dilated edge: the blurred mask reaches past the person outline…
+  sctx.filter = `blur(${r}px)`;
+  sctx.drawImage(mask.img, sx, sy, sWidth, sHeight, -sw / 2, -sh / 2, sw, sh);
+  sctx.filter = 'none';
+  // …minus the person core leaves a ring hugging the boundary.
+  sctx.globalCompositeOperation = 'destination-out';
+  sctx.drawImage(mask.img, sx, sy, sWidth, sHeight, -sw / 2, -sh / 2, sw, sh);
+  sctx.restore();
+
+  // Tint the ring with the backdrop it should be wrapping.
+  sctx.save();
+  sctx.globalCompositeOperation = 'source-in';
+  paintCameraBackgroundFill(sctx, { x: 0, y: 0, w: sw, h: sh }, builtinId);
+  sctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = WRAP_ALPHA;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(scratch, box.x, box.y, box.w, box.h);
   ctx.restore();
 }

@@ -73,6 +73,7 @@ declare global {
         mode?: 'none' | 'blur' | 'builtin';
         blur?: number;
         builtinId?: string;
+        quality?: 'auto' | 'high' | 'balanced' | 'lite';
       }): void;
       setFocus(patch: {
         mode?: 'none' | 'zoom' | 'spotlight';

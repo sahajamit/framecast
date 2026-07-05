@@ -560,6 +560,21 @@ select.select option {
   color: var(--color-accent);
   font-variant-numeric: tabular-nums;
 }
+/* ?dbg=seg — live matting tier + timings pinned to the stage (dev-only). */
+.seg-dbg {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--color-accent);
+  background: rgba(0, 0, 0, 0.55);
+  padding: 4px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+}
 input[type='range'].fader {
   -webkit-appearance: none;
   appearance: none;

@@ -349,6 +349,7 @@ export const DEFAULT_CAMERA_BACKGROUND: CameraBackground = {
   blur: 18,
   // A mid-tone monochrome: instant (no decode) as the first Backdrop pick.
   builtinId: 'slate',
+  quality: 'auto',
 };
 
 /** No punch-in: full screen. A take always arms at this. */

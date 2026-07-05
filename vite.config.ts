@@ -16,7 +16,23 @@ export default defineConfig({
         // runtime (~11 MB) is precached too so the camera background works
         // offline, hence the raised size cap.
         globPatterns: ['**/*.{js,css,html,svg,png,jpg,jpeg,wasm,woff2,tflite}'],
+        // High-tier matting assets (onnxruntime wasm + the ~15 MB RVM model)
+        // must NOT be precached: only WebGPU devices with a background active
+        // ever fetch them (invariant #11). They runtime-cache below instead,
+        // so high-tier users still get offline matting after first use.
+        globIgnores: ['**/ort/**', '**/models/*.onnx'],
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            urlPattern: /\/ort\/.*\.(wasm|mjs)$|\/models\/.*\.onnx$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'framecast-matting-high',
+              expiration: { maxEntries: 8 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
       manifest: {
         name: 'framecast',
@@ -35,6 +51,21 @@ export default defineConfig({
   ],
   build: {
     target: 'es2022',
+  },
+  // Mirror the production COOP/COEP headers (netlify.toml) so dev == prod:
+  // cross-origin isolation enables SharedArrayBuffer / threaded WASM for the
+  // camera-background CPU tier (issue #11).
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
   worker: {
     format: 'es',
