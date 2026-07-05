@@ -96,8 +96,13 @@
   --font-ui:      "Familjen Grotesk", sans-serif;        /* body / controls */
   --font-mono:    "IBM Plex Mono", monospace;            /* readouts / labels */
 
-  --text-2xs: 9.5px;     /* engraved micro-labels, mono only */
-  --text-xs:  10.5px;    /* mono labels, captions */
+  /* Readability revision 2026-07-05: micro type lifted from 9.5/10.5px and
+     tracking pulled back — thin mono under 10px with 0.14-0.22em tracking
+     was illegible on the dark set (over-tracking at small sizes breaks word
+     shapes). The engraved feel now comes from case + medium weight instead
+     of extreme letterspace. */
+  --text-2xs: 11px;      /* engraved micro-labels, mono only */
+  --text-xs:  12px;      /* mono labels, captions */
   --text-sm:  12.5px;    /* ui small */
   --text-md:  13.5px;    /* ui body */
   --text-lg:  16px;      /* ui emphasized */
@@ -106,8 +111,8 @@
   --text-3xl: 38px;      /* display screen heading */
   --text-jumbo: 112px;   /* countdown / on-air timecode */
 
-  --track-wide:  0.14em; /* mono label tracking */
-  --track-wider: 0.22em; /* engraving tracking */
+  --track-wide:  0.09em; /* mono label tracking */
+  --track-wider: 0.14em; /* engraving tracking */
 
   /* ---- spacing ---- */
   --space-1: 4px;

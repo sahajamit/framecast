@@ -58,6 +58,27 @@ body::after {
   text-transform: uppercase;
   color: var(--color-ink-3);
 }
+/* Readability: every engraved micro-label renders in the mono's medium cut.
+   IBM Plex Mono 400 at ~10px is too thin to hold its strokes on the dark
+   set; 500 keeps the machine-text character while staying legible. */
+.label,
+.tagline,
+.ctl-name,
+.ctl-val,
+.fold-title,
+.fold-sum,
+.tab-btn,
+.mod-hint,
+.mod-label .no,
+.hdr-read,
+.lamp-block,
+.swatch-cap,
+.seg-dbg,
+.monitor-strip,
+.rec-meta .sub,
+.hdr-roll-meta .sub {
+  font-weight: 500;
+}
 .readout {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
