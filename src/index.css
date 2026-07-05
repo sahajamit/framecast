@@ -1280,6 +1280,17 @@ input[type='range'].trim-range:focus-visible::-webkit-slider-thumb {
 .focus-strip.active {
   box-shadow: var(--shadow-slot), 0 0 0 1px var(--color-accent-dim);
 }
+.light-strip {
+  display: flex;
+  flex: 0 0 auto;
+  padding: 8px;
+  border-radius: var(--radius-2);
+  background: var(--surface-slot);
+  box-shadow: var(--shadow-slot);
+}
+.light-strip .seg {
+  flex: 1;
+}
 .focus-row {
   display: flex;
   align-items: center;

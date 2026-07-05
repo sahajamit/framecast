@@ -1,4 +1,11 @@
-import type { BubbleGeometry, CameraBackground, FrameSettings, LayoutKind, ScreenFocus } from '../types';
+import type {
+  BubbleGeometry,
+  CameraBackground,
+  CameraLighting,
+  FrameSettings,
+  LayoutKind,
+  ScreenFocus,
+} from '../types';
 import {
   bubbleRectPx,
   cameraSrcRect,
@@ -11,6 +18,7 @@ import {
 import type { Box, SrcRect } from './layout';
 import { paintBackdrop, paintCameraBlur } from './backdrops';
 import { paintCameraBackgroundFill } from './cameraBackgrounds';
+import { applyCameraGrade } from './lighting';
 import type { MaskSource } from './segmentation';
 
 /** A drawable image plus its intrinsic dimensions (VideoFrame, video element, canvas…). */
@@ -33,6 +41,8 @@ export interface SceneState {
   cameraBackground?: CameraBackground;
   /** Foreground person mask for the current camera frame, or null when not ready. */
   cameraMask?: MaskSource | null;
+  /** Colour grade for the camera; omitted or 'off' = ungraded camera. */
+  cameraLighting?: CameraLighting | null;
 }
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -51,8 +61,19 @@ const CARD_WELL = '#0a0908';
  * reproduces the original full-bleed output.
  */
 export function drawScene(ctx: Ctx2D, state: SceneState): void {
-  const { outW, outH, layout, bubble, frame, focus, screen, camera, cameraBackground, cameraMask } =
-    state;
+  const {
+    outW,
+    outH,
+    layout,
+    bubble,
+    frame,
+    focus,
+    screen,
+    camera,
+    cameraBackground,
+    cameraMask,
+    cameraLighting,
+  } = state;
 
   paintBackdrop(ctx, frame.backdrop, outW, outH, screen);
 
@@ -61,7 +82,18 @@ export function drawScene(ctx: Ctx2D, state: SceneState): void {
 
   if (layout === 'camera') {
     if (camera) {
-      drawFramedCamera(ctx, camera, bubble, box, radius, frame.shadow, outH, cameraBackground, cameraMask);
+      drawFramedCamera(
+        ctx,
+        camera,
+        bubble,
+        box,
+        radius,
+        frame.shadow,
+        outH,
+        cameraBackground,
+        cameraMask,
+        cameraLighting,
+      );
     }
     return;
   }
@@ -71,7 +103,7 @@ export function drawScene(ctx: Ctx2D, state: SceneState): void {
   }
 
   if (layout === 'screen+camera' && camera && bubble.visible) {
-    drawBubble(ctx, camera, bubble, outW, outH, cameraBackground, cameraMask);
+    drawBubble(ctx, camera, bubble, outW, outH, cameraBackground, cameraMask, cameraLighting);
   }
 }
 
@@ -151,13 +183,14 @@ function drawFramedCamera(
   outH: number,
   cameraBackground?: CameraBackground,
   cameraMask?: MaskSource | null,
+  cameraLighting?: CameraLighting | null,
 ): void {
   if (shadow) drawCardShadow(ctx, box, radius, outH);
   const src = cameraSrcRect(bubble.zoom, camera.w, camera.h, box.w / box.h);
   ctx.save();
   roundRectPath(ctx, box, radius);
   ctx.clip();
-  paintCameraLayer(ctx, box, camera, src, bubble.mirror, cameraBackground, cameraMask);
+  paintCameraLayer(ctx, box, camera, src, bubble.mirror, cameraBackground, cameraMask, cameraLighting);
   ctx.restore();
 }
 
@@ -169,6 +202,7 @@ function drawBubble(
   outH: number,
   cameraBackground?: CameraBackground,
   cameraMask?: MaskSource | null,
+  cameraLighting?: CameraLighting | null,
 ): void {
   const rect = bubbleRectPx(bubble, outW, outH);
   const src = cameraSrcRect(bubble.zoom, camera.w, camera.h, 1);
@@ -189,7 +223,7 @@ function drawBubble(
   ctx.beginPath();
   ctx.roundRect(rect.x, rect.y, rect.w, rect.h, rect.r);
   ctx.clip();
-  paintCameraLayer(ctx, rect, camera, src, bubble.mirror, cameraBackground, cameraMask);
+  paintCameraLayer(ctx, rect, camera, src, bubble.mirror, cameraBackground, cameraMask, cameraLighting);
   ctx.restore();
 
   if (bubble.border) {
@@ -223,7 +257,9 @@ interface DestBox {
  * background (mode 'none' or no mask yet) this is the original raw crop, so
  * behavior and the preview==recording guarantee are unchanged. With a mode and
  * a ready mask it paints the chosen background, then the segmented person on
- * top — the whole reason this feature exists.
+ * top — the whole reason this feature exists. Finally the lighting grade is
+ * applied in place over the camera box (a no-op when 'off'), so it colours the
+ * person consistently across every background mode.
  */
 function paintCameraLayer(
   ctx: Ctx2D,
@@ -233,18 +269,18 @@ function paintCameraLayer(
   mirror: boolean,
   bg?: CameraBackground,
   mask?: MaskSource | null,
+  lighting?: CameraLighting | null,
 ): void {
   if (!bg || bg.mode === 'none' || !mask) {
     drawCameraCrop(ctx, box, camera, src, mirror);
-    return;
-  }
-
-  if (bg.mode === 'blur') {
+  } else if (bg.mode === 'blur') {
     paintCameraBlur(ctx, box, camera, src, mirror, bg.blur);
+    drawMaskedPerson(ctx, box, camera, src, mirror, mask);
   } else {
     paintCameraBackgroundFill(ctx, box, bg.builtinId);
+    drawMaskedPerson(ctx, box, camera, src, mirror, mask);
   }
-  drawMaskedPerson(ctx, box, camera, src, mirror, mask);
+  applyCameraGrade(ctx, box, lighting);
 }
 
 /** The original crop: centered, zoom-cropped, optionally mirrored camera fill. */

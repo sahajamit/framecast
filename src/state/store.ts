@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   BubbleGeometry,
   CameraBackground,
+  CameraLighting,
   ExportFormat,
   FrameSettings,
   LayoutKind,
@@ -18,6 +19,7 @@ import {
   DEFAULT_FOCUS,
   DEFAULT_FRAME,
 } from '../compositor/layout';
+import { DEFAULT_CAMERA_LIGHTING } from '../compositor/lighting';
 import { migrateSettings } from './persistMigrate';
 
 export interface Settings {
@@ -36,6 +38,8 @@ export interface Settings {
   frame: FrameSettings;
   /** Virtual background for the camera bubble / headshot. */
   cameraBackground: CameraBackground;
+  /** Lighting / colour grade for the camera bubble / headshot. */
+  cameraLighting: CameraLighting;
 }
 
 interface SessionState {
@@ -85,6 +89,7 @@ export interface AppState {
   patchBubble: (patch: Partial<BubbleGeometry>) => void;
   patchFrame: (patch: Partial<FrameSettings>) => void;
   patchCameraBackground: (patch: Partial<CameraBackground>) => void;
+  patchCameraLighting: (patch: Partial<CameraLighting>) => void;
   patchScreenFocus: (patch: Partial<ScreenFocus>) => void;
   setPhase: (phase: Phase) => void;
   patchSession: (patch: Partial<SessionState>) => void;
@@ -106,6 +111,7 @@ const DEFAULT_SETTINGS: Settings = {
   bubble: DEFAULT_BUBBLE,
   frame: DEFAULT_FRAME,
   cameraBackground: DEFAULT_CAMERA_BACKGROUND,
+  cameraLighting: DEFAULT_CAMERA_LIGHTING,
 };
 
 const INITIAL_SESSION: SessionState = {
@@ -149,6 +155,13 @@ export const useStore = create<AppState>()(
             cameraBackground: { ...state.settings.cameraBackground, ...patch },
           },
         })),
+      patchCameraLighting: (patch) =>
+        set((state) => ({
+          settings: {
+            ...state.settings,
+            cameraLighting: { ...state.settings.cameraLighting, ...patch },
+          },
+        })),
       patchScreenFocus: (patch) =>
         set((state) => ({ focus: { ...state.focus, ...patch } })),
       setPhase: (phase) => set((state) => ({ session: { ...state.session, phase } })),
@@ -158,7 +171,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'framecast-settings',
-      version: 4,
+      version: 5,
       // window.localStorage explicitly: Node's experimental localStorage
       // global shadows jsdom's working one in component tests.
       storage: createJSONStorage(() => window.localStorage),

@@ -8,6 +8,7 @@ import {
 import type {
   BubbleGeometry,
   CameraBackground,
+  CameraLighting,
   FrameSettings,
   LayoutKind,
   QualityPreset,
@@ -28,6 +29,7 @@ export interface SessionConfig {
   bubble: BubbleGeometry;
   frame: FrameSettings;
   cameraBackground: CameraBackground;
+  cameraLighting: CameraLighting;
   focus: ScreenFocus;
   audioCodec: 'aac' | 'opus' | null;
   libraryDir: FileSystemDirectoryHandle;
@@ -55,6 +57,7 @@ export interface ActiveSession {
   setBubble(bubble: BubbleGeometry): void;
   setFrame(frame: FrameSettings): void;
   setCameraBackground(cameraBackground: CameraBackground): void;
+  setCameraLighting(cameraLighting: CameraLighting): void;
   setFocus(focus: ScreenFocus, animate: boolean): void;
   stop(): Promise<{ fileName: string; handle: FileSystemFileHandle }>;
   /** Tear down and delete the part file (error/cancel path). */
@@ -112,6 +115,7 @@ export async function prepareSession(
     bubble: cfg.bubble,
     frame: cfg.frame,
     cameraBackground: cfg.cameraBackground,
+    cameraLighting: cfg.cameraLighting,
     focus: cfg.focus,
     screen: screenReadable,
     camera: cameraReadable,
@@ -186,6 +190,10 @@ export async function prepareSession(
 
     setCameraBackground(cameraBackground: CameraBackground) {
       worker.postMessage({ type: 'cameraBackground', cameraBackground } satisfies ToCompositor);
+    },
+
+    setCameraLighting(cameraLighting: CameraLighting) {
+      worker.postMessage({ type: 'cameraLighting', cameraLighting } satisfies ToCompositor);
     },
 
     setFocus(focus: ScreenFocus, animate: boolean) {

@@ -78,6 +78,28 @@ export interface CameraBackground {
   builtinId: CameraBackgroundId;
 }
 
+/**
+ * Camera lighting / colour grade for the headshot, applied on top of any
+ * virtual background. Aimed at people recording in a normal, badly-lit room:
+ * a preset stamps a whole look (brighten + warm/cool + contrast) and the manual
+ * sliders fine-tune from there. `off` — and neutral slider values — record the
+ * raw camera byte-for-byte, so the grade is fully opt-in. The preset registry
+ * and lookups live in `compositor/lighting.ts`.
+ */
+export type CameraLightingPresetId = 'off' | 'neutral' | 'warm' | 'cool' | 'soft' | 'punch';
+
+export interface CameraLighting {
+  preset: CameraLightingPresetId;
+  /** Exposure multiplier; 1 = unchanged. */
+  brightness: number;
+  /** Contrast multiplier; 1 = unchanged. */
+  contrast: number;
+  /** Saturation multiplier; 1 = unchanged (preset-driven, no v1 slider). */
+  saturate: number;
+  /** Colour temperature: -1 (cool/blue) .. 0 (neutral) .. +1 (warm/orange). */
+  warmth: number;
+}
+
 export type FocusMode = 'none' | 'zoom' | 'spotlight';
 
 /**

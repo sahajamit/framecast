@@ -12,6 +12,7 @@ import {
   toast,
   updateBubble,
   updateCameraBackground,
+  updateCameraLighting,
   updateFocus,
   updateFrame,
 } from './controller';
@@ -37,6 +38,16 @@ import {
 import { Fader, Module, Segmented, SelectField, Switch, Timecode, VuMeter } from '../ui/controls';
 import { BackdropPicker } from '../ui/BackdropPicker';
 import { CameraBackgroundPicker } from '../ui/CameraBackgroundPicker';
+import {
+  BRIGHTNESS_MAX,
+  BRIGHTNESS_MIN,
+  CONTRAST_MAX,
+  CONTRAST_MIN,
+  LIGHTING_PRESETS,
+  lightingFromPreset,
+  WARMTH_MAX,
+  WARMTH_MIN,
+} from '../compositor/lighting';
 import { useStageGestures, type FocusTool } from '../ui/useStageGestures';
 import { prefersReducedMotion } from '../ui/reducedMotion';
 import { meterPosition, readLevel } from '../audio/levelMeter';
@@ -171,6 +182,7 @@ export function PreflightScreen() {
           : null,
         cameraBackground: s.cameraBackground,
         cameraMask: bgActive && seg ? seg.getMask() : null,
+        cameraLighting: s.cameraLighting,
       });
     };
     render();
@@ -411,6 +423,60 @@ export function PreflightScreen() {
                   <p className="mod-hint">
                     Your room is replaced live, on-device. Nothing leaves the machine.
                   </p>
+                )}
+              </div>
+
+              <div className="mt-4">
+                <span className="ctl-name">Lighting</span>
+                <div className="mt-2">
+                  <Segmented
+                    ariaLabel="Camera lighting"
+                    value={settings.cameraLighting.preset}
+                    onChange={(preset) => updateCameraLighting(lightingFromPreset(preset))}
+                    options={LIGHTING_PRESETS.map((p) => ({ value: p.id, label: p.label }))}
+                  />
+                </div>
+                {settings.cameraLighting.preset !== 'off' && (
+                  <>
+                    <div className="mt-3">
+                      <Fader
+                        label="Brightness"
+                        value={settings.cameraLighting.brightness}
+                        min={BRIGHTNESS_MIN}
+                        max={BRIGHTNESS_MAX}
+                        step={0.01}
+                        onChange={(brightness) => updateCameraLighting({ brightness })}
+                        format={(v) => `${Math.round(v * 100)}%`}
+                      />
+                    </div>
+                    <div className="mt-2">
+                      <Fader
+                        label="Warmth"
+                        value={settings.cameraLighting.warmth}
+                        min={WARMTH_MIN}
+                        max={WARMTH_MAX}
+                        step={0.02}
+                        onChange={(warmth) => updateCameraLighting({ warmth })}
+                        format={(v) =>
+                          v === 0 ? 'Neutral' : v > 0 ? `Warm ${Math.round(v * 100)}` : `Cool ${Math.round(-v * 100)}`
+                        }
+                      />
+                    </div>
+                    <div className="mt-2">
+                      <Fader
+                        label="Contrast"
+                        value={settings.cameraLighting.contrast}
+                        min={CONTRAST_MIN}
+                        max={CONTRAST_MAX}
+                        step={0.01}
+                        onChange={(contrast) => updateCameraLighting({ contrast })}
+                        format={(v) => `${Math.round(v * 100)}%`}
+                      />
+                    </div>
+                    <p className="mod-hint">
+                      Baked into the recording, on-device. For a dim room, start with Neutral+.
+                    </p>
+                  </>
                 )}
               </div>
             </Module>
