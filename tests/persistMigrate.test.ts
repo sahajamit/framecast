@@ -53,6 +53,21 @@ describe('migrateSettings — matting quality (v6)', () => {
   });
 });
 
+describe('migrateSettings — default camera zoom (v7)', () => {
+  it('moves the untouched old default (1.4x) to the new full-frame default', () => {
+    const persisted = { settings: { bubble: { zoom: 1.4, mirror: true } } };
+    const migrated = settingsOf(migrateSettings(persisted, 6, DEFAULTS));
+    expect(migrated.bubble?.zoom).toBe(1);
+    expect(migrated.bubble?.mirror).toBe(true);
+  });
+
+  it('preserves a deliberately chosen zoom', () => {
+    const persisted = { settings: { bubble: { zoom: 2.2 } } };
+    const migrated = settingsOf(migrateSettings(persisted, 6, DEFAULTS));
+    expect(migrated.bubble?.zoom).toBe(2.2);
+  });
+});
+
 describe('migrateSettings — camera lighting (v5)', () => {
   it('adds the default (off) camera lighting to a pre-v5 blob', () => {
     const persisted = { settings: { cameraBackground: DEFAULT_CAMERA_BACKGROUND } };

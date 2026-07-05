@@ -34,5 +34,14 @@ export function migrateSettings(persisted: unknown, version: number, defaults: S
       cameraBackground: { ...state.settings.cameraBackground, quality: 'auto' },
     };
   }
+  // v7 changed the default camera zoom from 1.4x to 1x (full frame). Only
+  // installs still sitting exactly on the old default follow the new one;
+  // any deliberately chosen zoom is preserved.
+  if (version < 7 && state.settings?.bubble && state.settings.bubble.zoom === 1.4) {
+    state.settings = {
+      ...state.settings,
+      bubble: { ...state.settings.bubble, zoom: 1 },
+    };
+  }
   return state;
 }
