@@ -1,6 +1,7 @@
 import type {
   BubbleGeometry,
   CameraBackground,
+  CameraLighting,
   FrameSettings,
   LayoutKind,
   ScreenFocus,
@@ -15,6 +16,7 @@ export interface CompositorInit {
   bubble: BubbleGeometry;
   frame: FrameSettings;
   cameraBackground: CameraBackground;
+  cameraLighting: CameraLighting;
   focus: ScreenFocus;
   /** Transferred MediaStreamTrackProcessor readables. */
   screen: ReadableStream<VideoFrame> | null;
@@ -28,6 +30,7 @@ export type ToCompositor =
   | { type: 'bubble'; bubble: BubbleGeometry }
   | { type: 'frame'; frame: FrameSettings }
   | { type: 'cameraBackground'; cameraBackground: CameraBackground }
+  | { type: 'cameraLighting'; cameraLighting: CameraLighting }
   | { type: 'focus'; focus: ScreenFocus; animate: boolean }
   | { type: 'stop' };
 

@@ -3,7 +3,14 @@ import { drawScene } from './scene';
 import { FocusAnimator } from './focus';
 import { FOCUS_GLIDE_MS } from './layout';
 import type { FromCompositor, ToCompositor } from './protocol';
-import type { BubbleGeometry, CameraBackground, FrameSettings, LayoutKind, ScreenFocus } from '../types';
+import type {
+  BubbleGeometry,
+  CameraBackground,
+  CameraLighting,
+  FrameSettings,
+  LayoutKind,
+  ScreenFocus,
+} from '../types';
 import { createCameraSegmenter, type CameraSegmenter } from './segmentation';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -18,6 +25,7 @@ let layout: LayoutKind = 'screen+camera';
 let bubble: BubbleGeometry | null = null;
 let sceneFrame: FrameSettings | null = null;
 let cameraBackground: CameraBackground | null = null;
+let cameraLighting: CameraLighting | null = null;
 let segmenter: CameraSegmenter | null = null;
 let focus: FocusAnimator | null = null;
 
@@ -46,6 +54,7 @@ self.onmessage = (event: MessageEvent<ToCompositor>) => {
         msg.bubble,
         msg.frame,
         msg.cameraBackground,
+        msg.cameraLighting,
         msg.focus,
         msg.screen,
         msg.camera,
@@ -68,6 +77,11 @@ self.onmessage = (event: MessageEvent<ToCompositor>) => {
       dirty = true;
       scheduleDraw();
       break;
+    case 'cameraLighting':
+      cameraLighting = msg.cameraLighting;
+      dirty = true;
+      scheduleDraw();
+      break;
     case 'focus':
       focus?.setTarget(msg.focus, msg.animate ? FOCUS_GLIDE_MS : 0, performance.now());
       dirty = true;
@@ -87,6 +101,7 @@ function init(
   initialBubble: BubbleGeometry,
   initialFrame: FrameSettings,
   initialCameraBackground: CameraBackground,
+  initialCameraLighting: CameraLighting,
   initialFocus: ScreenFocus,
   screen: ReadableStream<VideoFrame> | null,
   camera: ReadableStream<VideoFrame> | null,
@@ -99,6 +114,7 @@ function init(
   bubble = initialBubble;
   sceneFrame = initialFrame;
   cameraBackground = initialCameraBackground;
+  cameraLighting = initialCameraLighting;
   // Load the segmentation model during the countdown-to-record window (this
   // init runs at "0"), never lazily mid-frame, so the model is warm by the time
   // frames flow and the pipeline never idles waiting on it (invariant #8).
@@ -193,6 +209,7 @@ function draw(): void {
       : null,
     cameraBackground: cameraBackground ?? undefined,
     cameraMask: segmentationActive() ? segmenter!.getMask() : null,
+    cameraLighting: cameraLighting ?? undefined,
   });
   const frame = new VideoFrame(canvas, {
     timestamp: Math.round(performance.now() * 1000),

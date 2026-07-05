@@ -4,7 +4,13 @@
  * and the PiP deck call into the same instance.
  */
 import { useStore } from '../state/store';
-import type { BubbleGeometry, CameraBackground, FrameSettings, ScreenFocus } from '../types';
+import type {
+  BubbleGeometry,
+  CameraBackground,
+  CameraLighting,
+  FrameSettings,
+  ScreenFocus,
+} from '../types';
 import { DEFAULT_FOCUS } from '../compositor/layout';
 import { prefersReducedMotion } from '../ui/reducedMotion';
 import { runtime } from '../recorder/runtime';
@@ -337,6 +343,7 @@ async function beginRecording(): Promise<void> {
         bubble: settings.bubble,
         frame: settings.frame,
         cameraBackground: settings.cameraBackground,
+        cameraLighting: settings.cameraLighting,
         focus: store().focus,
         audioCodec: settings.micEnabled || displayAudioTrack ? store().devices.audioCodec : null,
         libraryDir: runtime.libraryDir!,
@@ -401,6 +408,11 @@ export function updateFrame(patch: Partial<FrameSettings>): void {
 export function updateCameraBackground(patch: Partial<CameraBackground>): void {
   store().patchCameraBackground(patch);
   runtime.session?.setCameraBackground(store().settings.cameraBackground);
+}
+
+export function updateCameraLighting(patch: Partial<CameraLighting>): void {
+  store().patchCameraLighting(patch);
+  runtime.session?.setCameraLighting(store().settings.cameraLighting);
 }
 
 /** Sets the live screen punch-in / spotlight (glides unless reduced-motion). */

@@ -7,8 +7,10 @@ import {
   stopRecording,
   togglePause,
   updateBubble,
+  updateCameraLighting,
   updateFocus,
 } from '../app/controller';
+import { LIGHTING_PRESETS, lightingFromPreset } from '../compositor/lighting';
 import { Fader, Lamp, Segmented, Timecode, VuMeter } from '../ui/controls';
 import { useStageGestures, type FocusTool } from '../ui/useStageGestures';
 import { readLevel, meterPosition } from '../audio/levelMeter';
@@ -50,6 +52,7 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
   const layout = useStore((s) => s.settings.layout);
   const micEnabled = useStore((s) => s.settings.micEnabled);
   const presetId = useStore((s) => s.settings.presetId);
+  const lighting = useStore((s) => s.settings.cameraLighting);
   const focus = useStore((s) => s.focus);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -59,6 +62,7 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
 
   const session = runtime.session;
   const hasBubble = layout === 'screen+camera';
+  const hasCamera = layout !== 'screen';
 
   // Live composited preview.
   useEffect(() => {
@@ -245,6 +249,17 @@ export function ControlDeck({ windowRef }: { windowRef: Window }) {
             step={0.01}
             onChange={(size) => updateBubble({ size })}
             format={(v) => `${Math.round(v * 100)}%`}
+          />
+        </div>
+      )}
+
+      {hasCamera && (
+        <div className="light-strip">
+          <Segmented
+            ariaLabel="Lighting"
+            value={lighting.preset}
+            onChange={(preset) => updateCameraLighting(lightingFromPreset(preset))}
+            options={LIGHTING_PRESETS.map((p) => ({ value: p.id, label: p.label }))}
           />
         </div>
       )}

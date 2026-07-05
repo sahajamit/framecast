@@ -1,5 +1,6 @@
 import type { Settings } from './store';
 import { DEFAULT_CAMERA_BACKGROUND, DEFAULT_FRAME } from '../compositor/layout';
+import { DEFAULT_CAMERA_LIGHTING } from '../compositor/lighting';
 
 type PersistedShape = { settings?: Partial<Settings> };
 
@@ -21,6 +22,10 @@ export function migrateSettings(persisted: unknown, version: number, defaults: S
   // v4 added the camera background; existing installs default to 'none'.
   if (version < 4 && state.settings && !state.settings.cameraBackground) {
     state.settings = { ...state.settings, cameraBackground: DEFAULT_CAMERA_BACKGROUND };
+  }
+  // v5 added camera lighting; existing installs default to 'off' (no grade).
+  if (version < 5 && state.settings && !state.settings.cameraLighting) {
+    state.settings = { ...state.settings, cameraLighting: DEFAULT_CAMERA_LIGHTING };
   }
   return state;
 }
