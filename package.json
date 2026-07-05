@@ -1,7 +1,7 @@
 {
   "name": "framecast",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Fully-local screen + camera recorder for creators. Nothing ever leaves your machine.",
   "license": "MIT",
