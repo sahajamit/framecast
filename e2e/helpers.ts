@@ -73,6 +73,7 @@ declare global {
         mode?: 'none' | 'blur' | 'builtin';
         blur?: number;
         builtinId?: string;
+        quality?: 'auto' | 'high' | 'balanced' | 'lite';
       }): void;
       setFocus(patch: {
         mode?: 'none' | 'zoom' | 'spotlight';
@@ -82,7 +83,12 @@ declare global {
         h?: number;
       }): void;
       sampleTopLeft(name: string): Promise<[number, number, number]>;
-      samplePixel(name: string, nx: number, ny: number): Promise<[number, number, number]>;
+      samplePixel(
+        name: string,
+        nx: number,
+        ny: number,
+        atSec?: number,
+      ): Promise<[number, number, number]>;
     };
   }
 }

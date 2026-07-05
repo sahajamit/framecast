@@ -9,6 +9,21 @@ import studioUrl from '../assets/camera-bg/studio.jpg?url';
 import cafeUrl from '../assets/camera-bg/cafe.jpg?url';
 import botanicaUrl from '../assets/camera-bg/botanica.jpg?url';
 import workshopUrl from '../assets/camera-bg/workshop.jpg?url';
+// The 2026-07 expansion: seven scenes spanning generational tastes, from
+// lofi/neon (teens, twenties) through penthouse/coastal/gallery (thirties,
+// forties) to the ageless cabin. Same craft rules as the originals: mid-tone,
+// soft focus, visually quiet center where the person sits.
+// The signature backdrop: a framecast-branded studio (neon wordmark + boom
+// mic). First in the gallery by design — every take recorded on it carries
+// the brand, and it doubles as the house backdrop for framecast's own videos.
+import framecastUrl from '../assets/camera-bg/framecast.jpg?url';
+import neonUrl from '../assets/camera-bg/neon.jpg?url';
+import lofiUrl from '../assets/camera-bg/lofi.jpg?url';
+import pastelUrl from '../assets/camera-bg/pastel.jpg?url';
+import skylineUrl from '../assets/camera-bg/skyline.jpg?url';
+import coastalUrl from '../assets/camera-bg/coastal.jpg?url';
+import galleryUrl from '../assets/camera-bg/gallery.jpg?url';
+import cabinUrl from '../assets/camera-bg/cabin.jpg?url';
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -41,12 +56,20 @@ export type CameraBg = ImageBg | SolidBg;
  * Append here to grow the gallery — nothing is ever removed.
  */
 export const CAMERA_BACKGROUNDS: CameraBg[] = [
+  { id: 'framecast', label: 'Framecast studio', kind: 'image', url: framecastUrl },
   { id: 'home', label: 'Home office', kind: 'image', url: homeUrl },
   { id: 'library', label: 'Library', kind: 'image', url: libraryUrl },
   { id: 'studio', label: 'Studio', kind: 'image', url: studioUrl },
   { id: 'cafe', label: 'Cafe', kind: 'image', url: cafeUrl },
   { id: 'botanica', label: 'Botanica', kind: 'image', url: botanicaUrl },
   { id: 'workshop', label: 'Workshop', kind: 'image', url: workshopUrl },
+  { id: 'neon', label: 'Neon loft', kind: 'image', url: neonUrl },
+  { id: 'lofi', label: 'Lofi sunset', kind: 'image', url: lofiUrl },
+  { id: 'pastel', label: 'Daydream', kind: 'image', url: pastelUrl },
+  { id: 'skyline', label: 'Penthouse', kind: 'image', url: skylineUrl },
+  { id: 'coastal', label: 'Coastal', kind: 'image', url: coastalUrl },
+  { id: 'gallery', label: 'Gallery', kind: 'image', url: galleryUrl },
+  { id: 'cabin', label: 'Cabin', kind: 'image', url: cabinUrl },
   { id: 'slate', label: 'Slate', kind: 'solid', colors: ['#4c5661', '#2c343c'] },
   { id: 'sand', label: 'Sand', kind: 'solid', colors: ['#b7a184', '#877053'] },
 ];
@@ -55,6 +78,8 @@ const BY_ID = new Map<string, CameraBg>(CAMERA_BACKGROUNDS.map((b) => [b.id, b])
 
 /** Neutral fill shown while a photo decodes, so the bubble is never transparent. */
 const LOADING_FILL: [string, string] = ['#3a3f45', '#191c1f'];
+/** Shown when a user-imported image was deleted out from under the setting. */
+const MISSING_FILL: [string, string] = ['#4c5661', '#2c343c'];
 
 function resolve(id: CameraBackgroundId): CameraBg {
   return BY_ID.get(id) ?? CAMERA_BACKGROUNDS[CAMERA_BACKGROUNDS.length - 1]!;
@@ -112,11 +137,57 @@ function drawCover(ctx: Ctx2D, img: ImageBitmap, box: BoxPx): void {
   ctx.drawImage(img, box.x + (box.w - w) / 2, box.y + (box.h - h) / 2, w, h);
 }
 
+/* ---------- user-imported images (IndexedDB-backed, per-thread cache) ---------- */
+
+const userBitmaps = new Map<string, ImageBitmap | 'missing'>();
+const userLoading = new Set<string>();
+
 /**
- * Fills `box` (already clipped by the caller) with the chosen built-in: a photo
- * cover-fit, or a mid-tone monochrome gradient.
+ * Same synchronous-paint contract as bitmapFor, but sourced from IndexedDB
+ * (which the recording worker shares with the page): returns the decoded
+ * bitmap if ready, else kicks off a one-time load and reports the interim
+ * state. 'missing' = the image was deleted; callers paint a neutral solid so
+ * a stale persisted selection never strands a black bubble.
+ */
+function userBitmapFor(id: string): ImageBitmap | 'loading' | 'missing' {
+  const cached = userBitmaps.get(id);
+  if (cached) return cached;
+  if (!userLoading.has(id) && typeof createImageBitmap !== 'undefined') {
+    userLoading.add(id);
+    void import('./userBackgrounds')
+      .then((m) => m.getUserBackgroundBlob(id))
+      .then(async (blob) => {
+        userBitmaps.set(id, blob ? await createImageBitmap(blob) : 'missing');
+        userLoading.delete(id);
+      })
+      .catch(() => {
+        userBitmaps.set(id, 'missing');
+        userLoading.delete(id);
+      });
+  }
+  return userBitmaps.get(id) ?? 'loading';
+}
+
+/** Drops a deleted image from this thread's cache (the UI calls it on remove). */
+export function evictUserBitmap(id: string): void {
+  const cached = userBitmaps.get(id);
+  if (cached && cached !== 'missing') cached.close();
+  userBitmaps.delete(id);
+}
+
+/**
+ * Fills `box` (already clipped by the caller) with the chosen backdrop: a
+ * built-in photo cover-fit, a mid-tone monochrome gradient, or a
+ * user-imported image resolved from IndexedDB.
  */
 export function paintCameraBackgroundFill(ctx: Ctx2D, box: BoxPx, id: CameraBackgroundId): void {
+  if (id.startsWith('user:')) {
+    const bmp = userBitmapFor(id);
+    if (bmp === 'loading') paintSolid(ctx, box, LOADING_FILL);
+    else if (bmp === 'missing') paintSolid(ctx, box, MISSING_FILL);
+    else drawCover(ctx, bmp, box);
+    return;
+  }
   const bg = resolve(id);
   if (bg.kind === 'solid') {
     paintSolid(ctx, box, bg.colors);

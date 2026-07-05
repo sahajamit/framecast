@@ -38,4 +38,13 @@ export type FromCompositor =
   | { type: 'firstFrame' }
   | { type: 'sourceEnded'; source: 'screen' | 'camera' }
   | { type: 'stopped' }
-  | { type: 'fatal'; message: string };
+  | { type: 'fatal'; message: string }
+  /** Periodic matting tier + timings while a camera background is active (dbg). */
+  | {
+      type: 'mattingStats';
+      tier: string;
+      inferMs: number;
+      refineMs: number;
+      inferFps: number;
+      demoted: boolean;
+    };

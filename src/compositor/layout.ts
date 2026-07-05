@@ -317,7 +317,9 @@ export const DEFAULT_BUBBLE: BubbleGeometry = {
   cx: 0.86,
   cy: 0.82,
   size: 0.24,
-  zoom: 1.4,
+  // Full frame by default: no surprise crop on first run. Head-framing is a
+  // deliberate opt-in via the Zoom fader (was 1.4 before settings v7).
+  zoom: 1,
   mirror: true,
   border: true,
   shadow: true,
@@ -349,6 +351,7 @@ export const DEFAULT_CAMERA_BACKGROUND: CameraBackground = {
   blur: 18,
   // A mid-tone monochrome: instant (no decode) as the first Backdrop pick.
   builtinId: 'slate',
+  quality: 'auto',
 };
 
 /** No punch-in: full screen. A take always arms at this. */

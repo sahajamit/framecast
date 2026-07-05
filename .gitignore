@@ -9,3 +9,8 @@ playwright-report
 blob-report
 coverage
 .netlify
+
+# High-tier matting assets, staged by scripts/fetch-matting-assets.mjs
+public/ort/
+public/models/*.onnx
+plans/
