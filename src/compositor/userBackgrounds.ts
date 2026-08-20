@@ -16,7 +16,7 @@
  * registry-driven CameraBackgroundId string without schema changes; the
  * painter in cameraBackgrounds.ts resolves the prefix to these blobs.
  */
-import { del, get, set } from 'idb-keyval';
+import { del, get, set, update } from 'idb-keyval';
 
 export const USER_BG_PREFIX = 'user:';
 
@@ -87,8 +87,11 @@ export async function importUserBackground(file: File): Promise<UserBgEntry> {
     const entry: UserBgEntry = { id, label, addedAt: Date.now() };
     await set(imgKey(id), img);
     await set(thumbKey(id), thumb);
-    const index = await listUserBackgrounds();
-    await set(INDEX_KEY, [entry, ...index]);
+    // update() reads and writes inside ONE IndexedDB transaction. A plain
+    // get-then-set is two, so two imports (or an import racing a removal)
+    // interleave and the later write drops the earlier entry, orphaning a
+    // blob that no longer appears in the gallery.
+    await update<UserBgEntry[]>(INDEX_KEY, (prev) => [entry, ...(prev ?? [])]);
     return entry;
   } finally {
     bitmap.close();
@@ -96,8 +99,9 @@ export async function importUserBackground(file: File): Promise<UserBgEntry> {
 }
 
 export async function removeUserBackground(id: string): Promise<void> {
-  const index = await listUserBackgrounds();
-  await set(INDEX_KEY, index.filter((e) => e.id !== id));
+  if (!hasIdb()) return;
+  // Same single-transaction requirement as the import path above.
+  await update<UserBgEntry[]>(INDEX_KEY, (prev) => (prev ?? []).filter((e) => e.id !== id));
   await del(imgKey(id));
   await del(thumbKey(id));
 }
