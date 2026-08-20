@@ -218,6 +218,12 @@ class TieredMattingEngine implements MattingEngine {
   private transitionTo(tier: MattingTier): void {
     if (this.closed || tier === this.curTier) return;
     this.curTier = tier;
+    // Every accepted tier change supersedes any in-flight async spawn, even
+    // when we then decline to spawn (same model kind, below). spawnInferencer
+    // bumps the epoch too, but it is not always reached: without this bump a
+    // pending import('./rvm') from an earlier high-tier spawn still passes its
+    // epoch guard and installs the RVM model into a tier we have left.
+    this.spawnEpoch++;
     this.governor.configure(TIER_CONFIG[tier], this.lastFrameBudget);
     this.inferIntervalEma = 0;
     const cur = this.inferencer;
