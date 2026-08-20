@@ -28,6 +28,15 @@ type OrtSession = import('onnxruntime-web/webgpu').InferenceSession;
 /** RVM's own guidance: the encoder wants to see the person at roughly 256 px. */
 const INTERNAL_TARGET = 256;
 
+/**
+ * The only outputs this inferencer reads. RVM also emits `fgr`, a full
+ * [1,3,H,W] float32 foreground; without an explicit fetch list ORT returns it
+ * every run, and since only r1o-r4o are pinned to 'gpu-buffer' it is copied
+ * back to the CPU and dropped. That is exactly the round-trip the IO binding
+ * in init() exists to avoid.
+ */
+const OUTPUTS = ['pha', 'r1o', 'r2o', 'r3o', 'r4o'] as const;
+
 class RvmInferencer implements Inferencer {
   ready = false;
   failed = false;
@@ -132,7 +141,7 @@ class RvmInferencer implements Inferencer {
         r4i: rec[3],
         downsample_ratio: new ort.Tensor('float32', new Float32Array([ratio]), [1]),
       };
-      const out = await session.run(feeds);
+      const out = await session.run(feeds, [...OUTPUTS]);
       for (const t of rec) {
         try {
           t.dispose();
