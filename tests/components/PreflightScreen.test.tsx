@@ -20,7 +20,7 @@ vi.mock('../../src/app/controller', () => ({
   resetFocus: vi.fn(),
 }));
 
-import { PreflightScreen } from '../../src/app/PreflightScreen';
+import { HeaderRollTape, PreflightScreen } from '../../src/app/PreflightScreen';
 import { updateCameraBackground } from '../../src/app/controller';
 import { useStore } from '../../src/state/store';
 
@@ -41,8 +41,15 @@ describe('PreflightScreen gating', () => {
     useStore.getState().patchCameraBackground({ mode: 'none', blur: 18, builtinId: 'studio' });
   });
 
+  // Roll tape lives in the app header rail now (always in view no matter how
+  // long a tab grows); render it alongside the screen to assert the gating.
   it('disables Start and shows the select-screen step until a screen is picked', () => {
-    render(<PreflightScreen />);
+    render(
+      <>
+        <HeaderRollTape />
+        <PreflightScreen />
+      </>,
+    );
     expect(screen.getByRole('button', { name: /select screen/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /roll tape/i })).toBeDisabled();
     expect(screen.getByText(/select a screen to arm/i)).toBeInTheDocument();
@@ -50,7 +57,12 @@ describe('PreflightScreen gating', () => {
 
   it('enables Start and shows sharing controls once a screen is live', () => {
     setSession({ screenReady: true, screenInfo: 'browser tab (viewport only)' });
-    render(<PreflightScreen />);
+    render(
+      <>
+        <HeaderRollTape />
+        <PreflightScreen />
+      </>,
+    );
     expect(screen.getByText('browser tab (viewport only)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /change/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /stop share/i })).toBeInTheDocument();
@@ -59,7 +71,12 @@ describe('PreflightScreen gating', () => {
 
   it('camera-only layout needs no screen but does need a camera', () => {
     useStore.getState().patchSettings({ layout: 'camera' });
-    render(<PreflightScreen />);
+    render(
+      <>
+        <HeaderRollTape />
+        <PreflightScreen />
+      </>,
+    );
     expect(screen.queryByRole('button', { name: /select screen/i })).not.toBeInTheDocument();
     // No camera stream in jsdom -> still disabled, with the waiting hint.
     expect(screen.getByRole('button', { name: /roll tape/i })).toBeDisabled();

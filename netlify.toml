@@ -9,6 +9,16 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# Cross-origin isolation: unlocks SharedArrayBuffer + multithreaded WASM for
+# the CPU segmentation path (camera background v2, issue #11). Every asset is
+# same-origin (fonts bundled via Fontsource, models under /mediapipe and
+# /models), so no CORP exceptions are needed.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
+
 # PWA: the service worker and manifest must never be served stale.
 [[headers]]
   for = "/sw.js"

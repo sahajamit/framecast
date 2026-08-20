@@ -15,6 +15,7 @@ import type {
   ScreenFocus,
 } from '../types';
 import type { FromCompositor, ToCompositor } from '../compositor/protocol';
+import { isSegDbg } from '../ui/debug';
 import type { AudioGraph } from '../audio/audioGraph';
 import { AUDIO_BITRATE, assertVideoEncodable, outputDims } from './encoderConfig';
 import { DiskWriterClient, promotePartToLibrary } from './diskWriter';
@@ -126,6 +127,16 @@ export async function prepareSession(
   const compositorStopped = new Promise<void>((resolve) => {
     worker.addEventListener('message', (event: MessageEvent<FromCompositor>) => {
       if (event.data.type === 'stopped') resolve();
+      // ?dbg=seg: the recording-side matting numbers, the ones that matter for
+      // validating low-end devices we don't own (issue #11).
+      if (event.data.type === 'mattingStats' && isSegDbg()) {
+        const s = event.data;
+        console.info(
+          `[framecast seg] tier=${s.tier}${s.demoted ? ' (demoted)' : ''} ` +
+            `infer=${s.inferMs.toFixed(1)}ms refine=${s.refineMs.toFixed(1)}ms ` +
+            `cadence=${s.inferFps.toFixed(0)}fps`,
+        );
+      }
     });
   });
 

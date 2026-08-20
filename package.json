@@ -16,7 +16,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "predev": "node scripts/fetch-matting-assets.mjs",
+    "prebuild": "node scripts/fetch-matting-assets.mjs"
   },
   "dependencies": {
     "@fontsource-variable/big-shoulders-display": "^5.2.5",
@@ -26,6 +28,7 @@
     "@sapphi-red/web-noise-suppressor": "^0.3.5",
     "idb-keyval": "^6.2.2",
     "mediabunny": "^1.45.2",
+    "onnxruntime-web": "^1.27.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "zustand": "^5.0.5"

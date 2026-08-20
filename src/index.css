@@ -58,6 +58,27 @@ body::after {
   text-transform: uppercase;
   color: var(--color-ink-3);
 }
+/* Readability: every engraved micro-label renders in the mono's medium cut.
+   IBM Plex Mono 400 at ~10px is too thin to hold its strokes on the dark
+   set; 500 keeps the machine-text character while staying legible. */
+.label,
+.tagline,
+.ctl-name,
+.ctl-val,
+.fold-title,
+.fold-sum,
+.tab-btn,
+.mod-hint,
+.mod-label .no,
+.hdr-read,
+.lamp-block,
+.swatch-cap,
+.seg-dbg,
+.monitor-strip,
+.rec-meta .sub,
+.hdr-roll-meta .sub {
+  font-weight: 500;
+}
 .readout {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -383,6 +404,42 @@ body::after {
   cursor: default;
   pointer-events: none;
 }
+/* Header-docked transport: the same punch key at rail scale, always in view
+   no matter how long the active preflight tab scrolls. */
+.hdr-roll {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.punch-hdr {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-3);
+}
+.punch-hdr::after {
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-width: 2px;
+}
+.hdr-roll-meta .word {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1;
+  color: var(--color-ink);
+}
+.hdr-roll-meta .sub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: var(--track-wide);
+  color: var(--color-ink-3);
+  text-transform: uppercase;
+  margin-top: 3px;
+  white-space: nowrap;
+}
 
 /* ---------------- segmented control ---------------- */
 .seg {
@@ -447,7 +504,8 @@ body::after {
   align-items: center;
   gap: 5px;
 }
-.swatch canvas {
+.swatch canvas,
+.swatch img {
   width: 100%;
   height: auto;
   aspect-ratio: 16 / 9;
@@ -456,11 +514,13 @@ body::after {
   box-shadow: var(--shadow-slot), inset 0 0 0 1px var(--color-line);
   transition: box-shadow var(--t-ui) var(--ease-out), transform var(--t-tap) var(--ease-out);
 }
-.swatch:hover canvas {
+.swatch:hover canvas,
+.swatch:hover img {
   transform: translateY(-1px);
   box-shadow: var(--shadow-slot), inset 0 0 0 1px var(--color-line-strong);
 }
-.swatch.on canvas {
+.swatch.on canvas,
+.swatch.on img {
   box-shadow: 0 0 0 2px var(--color-accent), 0 0 12px -2px var(--color-accent-dim);
 }
 .swatch.is-none canvas {
@@ -470,7 +530,8 @@ body::after {
 .swatch:focus-visible {
   outline: none;
 }
-.swatch:focus-visible canvas {
+.swatch:focus-visible canvas,
+.swatch:focus-visible img {
   box-shadow: var(--focus-ring);
 }
 .swatch-cap {
@@ -486,6 +547,111 @@ body::after {
 }
 .swatch.on .swatch-cap {
   color: var(--color-ink-2);
+}
+/* Collapsible sub-sections for long control tabs (Camera). */
+.fold {
+  margin-top: 10px;
+}
+.fold:first-child {
+  margin-top: 0;
+}
+.fold-head {
+  appearance: none;
+  border: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-2);
+  background: var(--surface-slot);
+  box-shadow: var(--shadow-slot);
+  cursor: pointer;
+  transition: box-shadow var(--t-ui) var(--ease-out);
+}
+.fold-head:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.fold-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--color-ink-2);
+}
+.fold.open .fold-title {
+  color: var(--color-ink);
+}
+.fold-sum {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 55%;
+}
+.fold-chev {
+  font-size: 10px;
+  color: var(--color-ink-3);
+  flex: 0 0 auto;
+}
+.fold-body {
+  padding: 12px 4px 4px;
+}
+
+/* Import-your-own tile + removable user-imported swatches. */
+.swatch-add .swatch-plus {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--color-ink-3);
+  border-radius: var(--radius-1);
+  background: var(--surface-slot);
+  box-shadow: var(--shadow-slot);
+  outline: 1px dashed var(--color-line-strong);
+  outline-offset: -4px;
+  transition: color var(--t-ui) var(--ease-out);
+}
+.swatch-add:hover .swatch-plus {
+  color: var(--color-accent);
+}
+.swatch-wrap {
+  position: relative;
+  display: block;
+}
+.swatch-x {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-bg-2);
+  color: var(--color-ink-3);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px var(--shadow-ambient), inset 0 0 0 1px var(--color-line);
+  opacity: 0;
+  transition: opacity var(--t-ui) var(--ease-out), color var(--t-ui) var(--ease-out);
+}
+.swatch-wrap:hover .swatch-x,
+.swatch-x:focus-visible {
+  opacity: 1;
+}
+.swatch-x:hover {
+  color: var(--color-ink);
 }
 .mod-hint {
   margin-top: 12px;
@@ -559,6 +725,21 @@ select.select option {
   font-size: var(--text-xs);
   color: var(--color-accent);
   font-variant-numeric: tabular-nums;
+}
+/* ?dbg=seg — live matting tier + timings pinned to the stage (dev-only). */
+.seg-dbg {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--color-accent);
+  background: rgba(0, 0, 0, 0.55);
+  padding: 4px 8px;
+  border-radius: 4px;
+  pointer-events: none;
 }
 input[type='range'].fader {
   -webkit-appearance: none;

@@ -71,11 +71,20 @@ export type CameraBackgroundMode = 'none' | 'blur' | 'builtin';
  */
 export type CameraBackgroundId = string;
 
+/**
+ * Matting quality for the camera background (issue #11). `auto` lets device
+ * capability detection and the runtime governor pick; the rest pin a tier.
+ * Tier semantics live in `compositor/matting/tiers.ts`.
+ */
+export type CameraMattingQuality = 'auto' | 'high' | 'balanced' | 'lite';
+
 export interface CameraBackground {
   mode: CameraBackgroundMode;
   /** Room-blur radius in px at a 1080p-height reference; scaled by outH/1080. */
   blur: number;
   builtinId: CameraBackgroundId;
+  /** Segmentation/matting quality; 'auto' (default) self-selects per device. */
+  quality: CameraMattingQuality;
 }
 
 /**

@@ -30,9 +30,13 @@
   --bevel-bot:         rgba(0,0,0,0.50);
 
   /* ---- ink hierarchy · cream silkscreen ---- */
+  /* Readability revision 2026-07-05: ink-2/ink-3 lifted (same warm hue,
+     higher lightness) — the original values fell under ~4.5:1 at the tiny
+     mono sizes used for knob captions, unselected tabs and header readouts.
+     Hierarchy (ink > ink-2 > ink-3) is preserved. */
   --color-ink:    #f0e8d8;
-  --color-ink-2:  #a89e8c;
-  --color-ink-3:  #756c5c;
+  --color-ink-2:  #c6bcaa;
+  --color-ink-3:  #9d9384;
 
   /* ---- interactive accent · LED green (never red) ---- */
   --color-accent:          oklch(0.82 0.17 145);
@@ -92,8 +96,13 @@
   --font-ui:      "Familjen Grotesk", sans-serif;        /* body / controls */
   --font-mono:    "IBM Plex Mono", monospace;            /* readouts / labels */
 
-  --text-2xs: 9.5px;     /* engraved micro-labels, mono only */
-  --text-xs:  10.5px;    /* mono labels, captions */
+  /* Readability revision 2026-07-05: micro type lifted from 9.5/10.5px and
+     tracking pulled back — thin mono under 10px with 0.14-0.22em tracking
+     was illegible on the dark set (over-tracking at small sizes breaks word
+     shapes). The engraved feel now comes from case + medium weight instead
+     of extreme letterspace. */
+  --text-2xs: 11px;      /* engraved micro-labels, mono only */
+  --text-xs:  12px;      /* mono labels, captions */
   --text-sm:  12.5px;    /* ui small */
   --text-md:  13.5px;    /* ui body */
   --text-lg:  16px;      /* ui emphasized */
@@ -102,8 +111,8 @@
   --text-3xl: 38px;      /* display screen heading */
   --text-jumbo: 112px;   /* countdown / on-air timecode */
 
-  --track-wide:  0.14em; /* mono label tracking */
-  --track-wider: 0.22em; /* engraving tracking */
+  --track-wide:  0.09em; /* mono label tracking */
+  --track-wider: 0.14em; /* engraving tracking */
 
   /* ---- spacing ---- */
   --space-1: 4px;
@@ -151,8 +160,8 @@
   --bevel-bot:         rgba(42,37,30,0.18);
 
   --color-ink:    #26211a;
-  --color-ink-2:  #5d564a;
-  --color-ink-3:  #6f6757;
+  --color-ink-2:  #524b3f;
+  --color-ink-3:  #5f574a;
 
   --color-accent:          oklch(0.50 0.13 145);
   --color-accent-strong:   oklch(0.43 0.13 145);

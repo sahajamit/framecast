@@ -11,7 +11,11 @@ import type {
   LayoutKind,
   ScreenFocus,
 } from '../types';
-import { createCameraSegmenter, type CameraSegmenter } from './segmentation';
+import {
+  createMattingEngine,
+  effectiveCameraBackground,
+  type MattingEngine,
+} from './matting/engine';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -26,7 +30,7 @@ let bubble: BubbleGeometry | null = null;
 let sceneFrame: FrameSettings | null = null;
 let cameraBackground: CameraBackground | null = null;
 let cameraLighting: CameraLighting | null = null;
-let segmenter: CameraSegmenter | null = null;
+let segmenter: MattingEngine | null = null;
 let focus: FocusAnimator | null = null;
 
 let latestScreen: VideoFrame | null = null;
@@ -35,6 +39,7 @@ let dirty = false;
 let lastDrawAt = 0;
 let drawTimer: ReturnType<typeof setTimeout> | null = null;
 let heartbeat: ReturnType<typeof setInterval> | null = null;
+let statsTimer: ReturnType<typeof setInterval> | null = null;
 let stopped = false;
 let sentFirstFrame = false;
 
@@ -71,12 +76,20 @@ self.onmessage = (event: MessageEvent<ToCompositor>) => {
       dirty = true;
       scheduleDraw();
       break;
-    case 'cameraBackground':
+    case 'cameraBackground': {
+      const prevQuality = cameraBackground?.quality;
       cameraBackground = msg.cameraBackground;
+      // A quality change rebuilds the engine (rare: the control lives in
+      // preflight, so this never happens mid-take in practice).
+      if (segmenter && prevQuality !== undefined && prevQuality !== msg.cameraBackground.quality) {
+        segmenter.close();
+        segmenter = null;
+      }
       ensureSegmenter();
       dirty = true;
       scheduleDraw();
       break;
+    }
     case 'cameraLighting':
       cameraLighting = msg.cameraLighting;
       dirty = true;
@@ -137,13 +150,31 @@ function init(
       draw();
     }
   }, 1000);
+  // Surface the matting tier + timings to the main thread every 2 s while a
+  // background is active (?dbg=seg logs them). Piggybacks on stats(), so the
+  // cost is a small message, not a measurement.
+  statsTimer = setInterval(() => {
+    if (stopped || !segmentationActive()) return;
+    const s = segmenter!.stats();
+    post({
+      type: 'mattingStats',
+      tier: s.tier,
+      inferMs: s.inferMs,
+      refineMs: s.refineMs,
+      inferFps: s.inferFps,
+      demoted: s.demoted,
+    });
+  }, 2000);
 }
 
-/** Lazily spin up the segmentation model, only when a background mode is on. */
+/** Lazily spin up the matting engine, only when a background mode is on. */
 function ensureSegmenter(): void {
   if (segmenter || stopped || layout === 'screen') return;
   if (!cameraBackground || cameraBackground.mode === 'none') return;
-  segmenter = createCameraSegmenter();
+  segmenter = createMattingEngine({ quality: cameraBackground.quality });
+  // This engine lives inside a take: the governor may downshift under load
+  // but never upshifts mid-recording (visible quality pops are worse).
+  segmenter?.setRecording(true);
 }
 
 function segmentationActive(): boolean {
@@ -194,6 +225,8 @@ function draw(): void {
   if (!ctx || !canvas || !writer || !bubble || !sceneFrame || !focus) return;
   // Advance the punch-in glide before composing so this frame reflects it.
   const animating = focus.tick(performance.now());
+  const segActive = segmentationActive();
+  const drawStart = performance.now();
   drawScene(ctx, {
     outW,
     outH,
@@ -207,10 +240,18 @@ function draw(): void {
     camera: latestCamera
       ? { img: latestCamera, w: latestCamera.displayWidth, h: latestCamera.displayHeight }
       : null,
-    cameraBackground: cameraBackground ?? undefined,
-    cameraMask: segmentationActive() ? segmenter!.getMask() : null,
+    cameraBackground:
+      segActive && cameraBackground
+        ? effectiveCameraBackground(cameraBackground, segmenter!.tier)
+        : (cameraBackground ?? undefined),
+    cameraMask: segActive ? segmenter!.getMask() : null,
+    // Light-wrap only where the mask is refined enough to deserve it.
+    cameraLightWrap: segActive && (segmenter!.tier === 'high' || segmenter!.tier === 'balanced'),
     cameraLighting: cameraLighting ?? undefined,
   });
+  // Feed the whole-draw cost to the engine's governor so it downshifts the
+  // matting tier before the recording ever misses frames.
+  if (segActive) segmenter!.noteDrawTime(performance.now() - drawStart, frameIntervalMs);
   const frame = new VideoFrame(canvas, {
     timestamp: Math.round(performance.now() * 1000),
     duration: Math.round(frameIntervalMs * 1000),
@@ -234,6 +275,7 @@ function draw(): void {
 async function stop(): Promise<void> {
   stopped = true;
   if (heartbeat !== null) clearInterval(heartbeat);
+  if (statsTimer !== null) clearInterval(statsTimer);
   if (drawTimer !== null) clearTimeout(drawTimer);
   segmenter?.close();
   segmenter = null;

@@ -22,16 +22,49 @@ describe('migrateSettings — camera background (v4)', () => {
     expect(migrated.cameraBackground?.mode).toBe('none');
   });
 
-  it('leaves an existing camera background untouched', () => {
+  it('preserves an existing camera background, only adding the v6 quality field', () => {
     const custom = { mode: 'blur', blur: 30, builtinId: 'ocean' } as const;
     const persisted = { settings: { cameraBackground: custom } };
     const migrated = settingsOf(migrateSettings(persisted, 4, DEFAULTS));
-    expect(migrated.cameraBackground).toEqual(custom);
+    expect(migrated.cameraBackground).toEqual({ ...custom, quality: 'auto' });
   });
 
   it('is a no-op on an empty blob (no settings)', () => {
     expect(() => migrateSettings({}, 3, DEFAULTS)).not.toThrow();
     expect(settingsOf(migrateSettings({}, 3, DEFAULTS)).cameraBackground).toBeUndefined();
+  });
+});
+
+describe('migrateSettings — matting quality (v6)', () => {
+  it('adds quality:auto to a pre-v6 camera background', () => {
+    const persisted = {
+      settings: { cameraBackground: { mode: 'builtin', blur: 18, builtinId: 'studio' } },
+    };
+    const migrated = settingsOf(migrateSettings(persisted, 5, DEFAULTS));
+    expect(migrated.cameraBackground?.quality).toBe('auto');
+    expect(migrated.cameraBackground?.builtinId).toBe('studio');
+  });
+
+  it('leaves an explicit quality choice untouched', () => {
+    const custom = { mode: 'blur', blur: 30, builtinId: 'slate', quality: 'lite' } as const;
+    const persisted = { settings: { cameraBackground: custom } };
+    const migrated = settingsOf(migrateSettings(persisted, 5, DEFAULTS));
+    expect(migrated.cameraBackground).toEqual(custom);
+  });
+});
+
+describe('migrateSettings — default camera zoom (v7)', () => {
+  it('moves the untouched old default (1.4x) to the new full-frame default', () => {
+    const persisted = { settings: { bubble: { zoom: 1.4, mirror: true } } };
+    const migrated = settingsOf(migrateSettings(persisted, 6, DEFAULTS));
+    expect(migrated.bubble?.zoom).toBe(1);
+    expect(migrated.bubble?.mirror).toBe(true);
+  });
+
+  it('preserves a deliberately chosen zoom', () => {
+    const persisted = { settings: { bubble: { zoom: 2.2 } } };
+    const migrated = settingsOf(migrateSettings(persisted, 6, DEFAULTS));
+    expect(migrated.bubble?.zoom).toBe(2.2);
   });
 });
 

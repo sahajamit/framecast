@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { CAMERA_BACKGROUNDS } from '../compositor/cameraBackgrounds';
 import { useStore } from '../state/store';
 import { runtime } from '../recorder/runtime';
 import {
@@ -18,7 +19,15 @@ import {
 } from './controller';
 import { drawScene } from '../compositor/scene';
 import { FocusAnimator } from '../compositor/focus';
-import { createCameraSegmenter, type CameraSegmenter } from '../compositor/segmentation';
+import {
+  createMattingEngine,
+  effectiveCameraBackground,
+  type MattingEngine,
+} from '../compositor/matting/engine';
+import type { MattingStats } from '../compositor/matting/types';
+import { HIGH_TIER_ENABLED } from '../compositor/matting/tiers';
+import type { CameraMattingQuality } from '../types';
+import { isSegDbg } from '../ui/debug';
 import {
   BUBBLE_MAX_SIZE,
   BUBBLE_MIN_SIZE,
@@ -72,9 +81,17 @@ export function PreflightScreen() {
   const screenVideoRef = useRef<HTMLVideoElement>(null);
   const focusAnim = useRef(new FocusAnimator(DEFAULT_FOCUS));
   const lastFocusTarget = useRef(DEFAULT_FOCUS);
-  const segmenterRef = useRef<CameraSegmenter | null>(null);
+  const segmenterRef = useRef<MattingEngine | null>(null);
   const [micLevel, setMicLevel] = useState(0);
+  const [matting, setMatting] = useState<MattingStats | null>(null);
   const [tool, setTool] = useState<FocusTool>('off');
+  // Camera-tab accordion: one section open at a time keeps the tab inside the
+  // viewport now that it holds framing + background + lighting stacks.
+  const [camFold, setCamFold] = useState<'framing' | 'background' | 'lighting' | null>(
+    'background',
+  );
+  const toggleFold = (id: 'framing' | 'background' | 'lighting') =>
+    setCamFold((cur) => (cur === id ? null : id));
   const [activeTab, setActiveTab] = useState<TabId>('program');
   const [, setMediaEpoch] = useState(0);
 
@@ -105,16 +122,35 @@ export function PreflightScreen() {
     if (!tabs.some((t) => t.id === activeTab)) setActiveTab('program');
   }, [tabs, activeTab]);
 
-  // Load / release the segmentation model to match the chosen background mode,
+  // Load / release the matting engine to match the chosen background mode,
   // so the preview shows exactly the background the recording will bake in.
+  // The warm engine survives Blur ↔ Backdrop toggles (tearing it down would
+  // flash the raw room for the model-reload seconds); only a quality change
+  // or turning the feature off rebuilds/releases it. The preview caps itself
+  // at the balanced tier: the High-tier matting model runs in the recording
+  // worker only (plan Q6), so preflight edges are representative, the
+  // recording's strictly equal or better.
+  const engineQualityRef = useRef<CameraMattingQuality | null>(null);
+  const bgActive = settings.cameraBackground.mode !== 'none' && settings.layout !== 'screen';
   useEffect(() => {
-    if (settings.cameraBackground.mode === 'none' || settings.layout === 'screen') {
+    if (!bgActive) {
       segmenterRef.current?.close();
       segmenterRef.current = null;
+      engineQualityRef.current = null;
       return;
     }
-    segmenterRef.current ??= createCameraSegmenter();
-  }, [settings.cameraBackground.mode, settings.layout]);
+    if (segmenterRef.current && engineQualityRef.current !== settings.cameraBackground.quality) {
+      segmenterRef.current.close();
+      segmenterRef.current = null;
+    }
+    if (!segmenterRef.current) {
+      segmenterRef.current = createMattingEngine({
+        quality: settings.cameraBackground.quality,
+        maxTier: 'balanced',
+      });
+      engineQualityRef.current = settings.cameraBackground.quality;
+    }
+  }, [bgActive, settings.cameraBackground.quality]);
   useEffect(
     () => () => {
       segmenterRef.current?.close();
@@ -122,6 +158,19 @@ export function PreflightScreen() {
     },
     [],
   );
+
+  // Live matting tier readout (and the ?dbg=seg overlay) next to the Quality
+  // control, so an auto-downshift is visible instead of silent.
+  useEffect(() => {
+    if (settings.cameraBackground.mode === 'none' || settings.layout === 'screen') {
+      setMatting(null);
+      return;
+    }
+    const tick = setInterval(() => {
+      setMatting(segmenterRef.current?.stats() ?? null);
+    }, 500);
+    return () => clearInterval(tick);
+  }, [settings.cameraBackground.mode, settings.layout]);
 
   // Bind the live camera + screen to hidden <video>s that feed the preview canvas.
   useEffect(() => {
@@ -167,6 +216,7 @@ export function PreflightScreen() {
       if (bgActive && seg && camReady) {
         seg.push(camReady, camReady.videoWidth, camReady.videoHeight);
       }
+      const drawStart = performance.now();
       drawScene(ctx, {
         outW: STAGE_W,
         outH: STAGE_H,
@@ -180,10 +230,14 @@ export function PreflightScreen() {
         camera: camReady
           ? { img: camReady, w: camReady.videoWidth, h: camReady.videoHeight }
           : null,
-        cameraBackground: s.cameraBackground,
+        cameraBackground:
+          bgActive && seg ? effectiveCameraBackground(s.cameraBackground, seg.tier) : s.cameraBackground,
         cameraMask: bgActive && seg ? seg.getMask() : null,
+        cameraLightWrap:
+          bgActive && !!seg && (seg.tier === 'high' || seg.tier === 'balanced'),
         cameraLighting: s.cameraLighting,
       });
+      if (bgActive && seg) seg.noteDrawTime(performance.now() - drawStart, 33.3);
     };
     render();
     return () => cancelAnimationFrame(raf);
@@ -260,6 +314,13 @@ export function PreflightScreen() {
         </div>
         <div className="stage force-dark" style={{ cursor, touchAction: 'none' }} {...handlers}>
           <canvas ref={canvasRef} width={STAGE_W} height={STAGE_H} />
+          {isSegDbg() && matting && (
+            <div className="seg-dbg">
+              seg {matting.tier}
+              {matting.demoted ? ' (demoted)' : ''} · infer {matting.inferMs.toFixed(1)}ms ·
+              refine {matting.refineMs.toFixed(1)}ms · {matting.inferFps.toFixed(0)}fps
+            </div>
+          )}
           {marquee && (
             <div
               className="focus-marquee"
@@ -321,6 +382,14 @@ export function PreflightScreen() {
 
           {activeTab === 'camera' && settings.layout !== 'screen' && (
             <Module title="Camera" no="CH·02">
+              <Fold
+                title="Framing"
+                summary={`${settings.bubble.zoom.toFixed(2)}× · ${
+                  settings.bubble.shape === 'circle' ? 'circle' : 'rounded'
+                }`}
+                open={camFold === 'framing'}
+                onToggle={() => toggleFold('framing')}
+              >
               <SelectField
                 ariaLabel="Camera"
                 value={settings.camId ?? ''}
@@ -384,9 +453,23 @@ export function PreflightScreen() {
                   label="Shadow"
                 />
               </div>
-              <div className="mt-4">
-                <span className="ctl-name">Camera background</span>
-                <div className="mt-2">
+              </Fold>
+
+              <Fold
+                title="Background"
+                summary={
+                  settings.cameraBackground.mode === 'none'
+                    ? 'Off'
+                    : settings.cameraBackground.mode === 'blur'
+                      ? 'Blur'
+                      : (CAMERA_BACKGROUNDS.find(
+                          (b) => b.id === settings.cameraBackground.builtinId,
+                        )?.label ?? 'Custom')
+                }
+                open={camFold === 'background'}
+                onToggle={() => toggleFold('background')}
+              >
+                <div>
                   <Segmented
                     ariaLabel="Camera background"
                     value={settings.cameraBackground.mode}
@@ -420,15 +503,54 @@ export function PreflightScreen() {
                   </div>
                 )}
                 {settings.cameraBackground.mode !== 'none' && (
-                  <p className="mod-hint">
-                    Your room is replaced live, on-device. Nothing leaves the machine.
-                  </p>
+                  <>
+                    <div className="mt-3">
+                      <div className="ctl-row">
+                        <span className="ctl-name">Quality</span>
+                        {matting && (
+                          <span className="ctl-val" title="Live matting tier">
+                            {matting.demoted ? '▾ ' : ''}
+                            {matting.tier.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2">
+                        <Segmented
+                          ariaLabel="Matting quality"
+                          value={settings.cameraBackground.quality}
+                          onChange={(quality) => updateCameraBackground({ quality })}
+                          options={[
+                            { value: 'auto', label: 'Auto' },
+                            // High reappears when the RVM/WebGPU tier is
+                            // re-enabled (see tiers.ts HIGH_TIER_ENABLED).
+                            ...(HIGH_TIER_ENABLED
+                              ? [{ value: 'high' as const, label: 'High' }]
+                              : []),
+                            { value: 'balanced', label: 'Balanced' },
+                            { value: 'lite', label: 'Lite' },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                    <p className="mod-hint">
+                      Your room is replaced live, on-device. Nothing leaves the machine. Auto
+                      picks the best quality this device sustains and steps down before a take
+                      ever stutters.
+                    </p>
+                  </>
                 )}
-              </div>
+              </Fold>
 
-              <div className="mt-4">
-                <span className="ctl-name">Lighting</span>
-                <div className="mt-2">
+              <Fold
+                title="Lighting"
+                summary={
+                  LIGHTING_PRESETS.find((p) => p.id === settings.cameraLighting.preset)?.label ??
+                  'Off'
+                }
+                open={camFold === 'lighting'}
+                onToggle={() => toggleFold('lighting')}
+              >
+                <div>
                   <Segmented
                     ariaLabel="Camera lighting"
                     value={settings.cameraLighting.preset}
@@ -478,7 +600,7 @@ export function PreflightScreen() {
                     </p>
                   </>
                 )}
-              </div>
+              </Fold>
             </Module>
           )}
 
@@ -682,25 +804,6 @@ export function PreflightScreen() {
           )}
         </div>
 
-        <div className="rec-mod">
-          <button
-            type="button"
-            className="punch"
-            aria-label="Roll tape"
-            disabled={!canStart}
-            onClick={() => void startFlow()}
-          />
-          <div className="rec-meta">
-            <div className="word">Roll tape</div>
-            <div className="sub">
-              {canStart
-                ? 'Arms · 3 · 2 · 1 · on air'
-                : settings.layout === 'camera'
-                  ? 'Waiting for the camera'
-                  : 'Select a screen to arm'}
-            </div>
-          </div>
-        </div>
       </div>
 
       <video ref={camVideoRef} muted playsInline className="hidden" />
@@ -712,6 +815,76 @@ export function PreflightScreen() {
 function deviceLabel(devices: MediaDeviceInfo[], id: string | null): string | null {
   if (!id) return null;
   return devices.find((d) => d.deviceId === id)?.label ?? null;
+}
+
+/**
+ * The transport control, docked in the app header rail so it stays reachable
+ * no matter how long the active preflight tab grows (the Camera tab in
+ * particular). Same punch key, same arming rules as always: camera layout
+ * arms on a live camera, screen layouts arm on a picked surface.
+ */
+export function HeaderRollTape() {
+  const layout = useStore((s) => s.settings.layout);
+  const screenReady = useStore((s) => s.session.screenReady);
+  const [, setMediaEpoch] = useState(0);
+  // runtime.cameraStream is a live object outside the store; re-render on
+  // device changes the same way the preflight screen does.
+  useEffect(() => onMediaChanged(() => setMediaEpoch((n) => n + 1)), []);
+  const canStart = layout === 'camera' ? !!runtime.cameraStream : screenReady;
+  return (
+    <div className="hdr-roll" data-testid="header-roll-tape">
+      <button
+        type="button"
+        className="punch punch-hdr"
+        aria-label="Roll tape"
+        disabled={!canStart}
+        onClick={() => void startFlow()}
+      />
+      <div className="hdr-roll-meta">
+        <div className="word">Roll tape</div>
+        <div className="sub">
+          {canStart
+            ? 'Arms · 3 · 2 · 1'
+            : layout === 'camera'
+              ? 'Waiting for the camera'
+              : 'Select a screen to arm'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Collapsible sub-section for a control panel that has outgrown one screen
+ * (the Camera tab in particular). Accordion-style: the parent keeps one open
+ * at a time so the tab never needs scrolling; the closed header still shows
+ * a live summary so nothing is invisible while folded.
+ */
+function Fold({
+  title,
+  summary,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  summary: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`fold ${open ? 'open' : ''}`}>
+      <button type="button" className="fold-head" aria-expanded={open} onClick={onToggle}>
+        <span className="fold-title">{title}</span>
+        <span className="fold-sum">{summary}</span>
+        <span className="fold-chev" aria-hidden="true">
+          {open ? '▾' : '▸'}
+        </span>
+      </button>
+      {open && <div className="fold-body">{children}</div>}
+    </section>
+  );
 }
 
 /** Stand-in for the screen feed before a capture surface is picked. */

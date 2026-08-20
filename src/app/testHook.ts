@@ -21,7 +21,12 @@ declare global {
       setCameraBackground(patch: Partial<CameraBackground>): void;
       setFocus(patch: Partial<ScreenFocus>): void;
       sampleTopLeft(name: string): Promise<[number, number, number]>;
-      samplePixel(name: string, nx: number, ny: number): Promise<[number, number, number]>;
+      samplePixel(
+        name: string,
+        nx: number,
+        ny: number,
+        atSec?: number,
+      ): Promise<[number, number, number]>;
     };
   }
 }
@@ -38,6 +43,7 @@ type AnyCtx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 /** Decodes a frame ~halfway in and returns its 2D context + dimensions. */
 async function decodeMidFrame(
   name: string,
+  atSec?: number,
 ): Promise<{ ctx: AnyCtx2D; width: number; height: number }> {
   const file = await fileInLibrary(name);
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
@@ -45,7 +51,14 @@ async function decodeMidFrame(
   if (!track || !(await track.canDecode())) throw new Error('cannot decode video track');
   const duration = await input.computeDuration();
   const sink = new CanvasSink(track, { fit: 'contain' });
-  const wrapped = await sink.getCanvas(Math.min(duration * 0.5, 1));
+  // Default samples early (capped at 1 s) so decodes stay cheap; specs that
+  // need steady-state content (e.g. after the matting model's warm-up lands
+  // mid-take) pass an explicit time.
+  const t =
+    atSec !== undefined
+      ? Math.max(0, Math.min(atSec, Math.max(0, duration - 0.2)))
+      : Math.min(duration * 0.5, 1);
+  const wrapped = await sink.getCanvas(t);
   if (!wrapped) throw new Error('no decodable frame');
   const canvas = wrapped.canvas as OffscreenCanvas | HTMLCanvasElement;
   const ctx = canvas.getContext('2d') as AnyCtx2D | null;
@@ -100,8 +113,8 @@ export function installTestHook(): void {
       const px = ctx.getImageData(3, 3, 1, 1).data;
       return [px[0] ?? 0, px[1] ?? 0, px[2] ?? 0];
     },
-    async samplePixel(name, nx, ny) {
-      const { ctx, width, height } = await decodeMidFrame(name);
+    async samplePixel(name, nx, ny, atSec) {
+      const { ctx, width, height } = await decodeMidFrame(name, atSec);
       const x = Math.max(0, Math.min(width - 1, Math.round(nx * width)));
       const y = Math.max(0, Math.min(height - 1, Math.round(ny * height)));
       const px = ctx.getImageData(x, y, 1, 1).data;
