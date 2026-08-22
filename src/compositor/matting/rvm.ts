@@ -29,13 +29,19 @@ type OrtSession = import('onnxruntime-web/webgpu').InferenceSession;
 const INTERNAL_TARGET = 256;
 
 /**
+ * The recurrent state, pinned to 'gpu-buffer' in init() so it never round-
+ * trips through JS. Anything that takes delivery of these owns releasing them.
+ */
+const RECURRENT_OUTPUTS = ['r1o', 'r2o', 'r3o', 'r4o'] as const;
+
+/**
  * The only outputs this inferencer reads. RVM also emits `fgr`, a full
  * [1,3,H,W] float32 foreground; without an explicit fetch list ORT returns it
  * every run, and since only r1o-r4o are pinned to 'gpu-buffer' it is copied
  * back to the CPU and dropped. That is exactly the round-trip the IO binding
  * in init() exists to avoid.
  */
-const OUTPUTS = ['pha', 'r1o', 'r2o', 'r3o', 'r4o'] as const;
+const OUTPUTS = ['pha', ...RECURRENT_OUTPUTS] as const;
 
 class RvmInferencer implements Inferencer {
   ready = false;
@@ -149,7 +155,19 @@ class RvmInferencer implements Inferencer {
           // First-frame zero tensors are CPU-side; dispose is a no-op there.
         }
       }
-      if (this.closed) return null;
+      if (this.closed) {
+        // Closed mid-inference. r1o-r4o are 'gpu-buffer' tensors and nothing
+        // downstream will ever adopt them now, so release them here rather
+        // than leaking four GPU buffers per interrupted run. pha is CPU-side.
+        for (const name of RECURRENT_OUTPUTS) {
+          try {
+            (out[name] as OrtTensor | undefined)?.dispose();
+          } catch {
+            // Already released by the runtime: nothing to do.
+          }
+        }
+        return null;
+      }
       this.rec = [
         out['r1o'] as OrtTensor,
         out['r2o'] as OrtTensor,
