@@ -26,11 +26,17 @@ export type { Inferencer } from './types';
  * worker-side segmentation in v1: recordings fell back to the raw camera
  * while the main-thread preview segmented happily.)
  *
- * Fix: fetch our own same-origin, hash-pinned loader once and evaluate it
- * with classic-script semantics (indirect eval runs in global scope), which
- * plants `ModuleFactory` on the worker global before tasks-vision looks for
- * it. Trust-equivalent to the `importScripts(loaderUrl)` MediaPipe itself
- * uses in classic workers. Main thread is untouched (script-tag path works).
+ * Fix: fetch our own loader once and evaluate it with classic-script
+ * semantics (indirect eval runs in global scope), which plants
+ * `ModuleFactory` on the worker global before tasks-vision looks for it.
+ * Trust-equivalent to the `importScripts(loaderUrl)` MediaPipe itself uses in
+ * classic workers. Main thread is untouched (script-tag path works).
+ *
+ * What the URL actually guarantees: it is a same-origin, content-hashed Vite
+ * build artifact resolved at build time, so it cannot be swapped for a third
+ * party's script and the filename changes when the bytes change. That is not
+ * the same as verifying the bytes on arrival, and this code does not do that.
+ * It is not "hash-pinned" in the integrity sense.
  */
 let loaderReady: Promise<void> | null = null;
 function ensureWasmLoaderGlobal(): Promise<void> {
@@ -40,6 +46,11 @@ function ensureWasmLoaderGlobal(): Promise<void> {
   loaderReady ??= fetch(wasmLoaderUrl)
     .then((r) => r.text())
     .then((src) => {
+      // Deliberate indirect eval: the loader must land on the worker's
+      // global scope, and nothing else puts it there. The source is a
+      // same-origin build artifact, never remote input. (No eslint-disable:
+      // this config does not enable no-eval, so a directive would itself be
+      // flagged as unused.)
       (0, eval)(src);
     })
     .catch((err: unknown) => {
