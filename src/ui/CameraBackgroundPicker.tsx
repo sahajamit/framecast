@@ -36,28 +36,55 @@ export function CameraBackgroundPicker({
   const [importError, setImportError] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Load the imported gallery + thumbnails (object URLs, revoked on unmount).
+  /**
+   * id -> object URL for every thumbnail we mint, so cleanup revokes the ones
+   * created after the initial load too. Keyed by id rather than held in the
+   * `thumbs` state so revoking never depends on a closure's view of it.
+   */
+  const urlsRef = useRef<Map<string, string>>(new Map());
+  /** False once unmounted: never mint a URL nothing will ever revoke. */
+  const aliveRef = useRef(true);
+
+  function trackUrl(id: string, blob: Blob): string {
+    const stale = urlsRef.current.get(id);
+    if (stale) URL.revokeObjectURL(stale);
+    const url = URL.createObjectURL(blob);
+    urlsRef.current.set(id, url);
+    return url;
+  }
+
+  function releaseUrl(id: string): void {
+    const url = urlsRef.current.get(id);
+    if (!url) return;
+    URL.revokeObjectURL(url);
+    urlsRef.current.delete(id);
+  }
+
+  // Load the imported gallery + thumbnails. Object URLs are tracked in a ref
+  // and revoked on unmount.
   useEffect(() => {
-    let cancelled = false;
-    const urls: string[] = [];
+    aliveRef.current = true;
+    const alive = aliveRef;
+    const urls = urlsRef;
     void (async () => {
       const entries = await listUserBackgrounds();
-      if (cancelled) return;
+      if (!alive.current) return;
       setUserBgs(entries);
       const map = new Map<string, string>();
       for (const e of entries) {
         const blob = await getUserBackgroundThumb(e.id);
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          urls.push(url);
-          map.set(e.id, url);
-        }
+        // Re-checked after every await: an unmount partway through this loop
+        // has already run cleanup, so a URL minted past this point would
+        // never be revoked by anything.
+        if (!alive.current) return;
+        if (blob) map.set(e.id, trackUrl(e.id, blob));
       }
-      if (!cancelled) setThumbs(map);
+      setThumbs(map);
     })();
     return () => {
-      cancelled = true;
-      urls.forEach((u) => URL.revokeObjectURL(u));
+      alive.current = false;
+      urls.current.forEach((u) => URL.revokeObjectURL(u));
+      urls.current.clear();
     };
   }, []);
 
@@ -67,9 +94,13 @@ export function CameraBackgroundPicker({
     try {
       const entry = await importUserBackground(file);
       const blob = await getUserBackgroundThumb(entry.id);
+      if (!aliveRef.current) return;
       setUserBgs((prev) => [entry, ...prev]);
       if (blob) {
-        setThumbs((prev) => new Map(prev).set(entry.id, URL.createObjectURL(blob)));
+        // Mint outside the updater: React may re-run or discard updater
+        // functions, which would strand or double-create the URL.
+        const url = trackUrl(entry.id, blob);
+        setThumbs((prev) => new Map(prev).set(entry.id, url));
       }
       onChange(entry.id);
     } catch {
@@ -83,11 +114,11 @@ export function CameraBackgroundPicker({
     setUserBgs((prev) => prev.filter((e) => e.id !== id));
     setThumbs((prev) => {
       const next = new Map(prev);
-      const url = next.get(id);
-      if (url) URL.revokeObjectURL(url);
       next.delete(id);
       return next;
     });
+    // Revoke outside the updater, for the same reason as onImport.
+    releaseUrl(id);
     // Deleting the active backdrop falls back to a neutral built-in.
     if (value === id) onChange('slate');
   }
