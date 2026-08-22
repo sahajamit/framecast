@@ -141,6 +141,14 @@ function drawCover(ctx: Ctx2D, img: ImageBitmap, box: BoxPx): void {
 
 const userBitmaps = new Map<string, ImageBitmap | 'missing'>();
 const userLoading = new Set<string>();
+/**
+ * Load generation per id, bumped on eviction. A decode already in flight
+ * compares the generation it captured before publishing, so deleting an image
+ * mid-load discards the result instead of resurrecting it. Entries persist
+ * after eviction (that is the point: a stale load must still see the bump),
+ * but they are one integer per id the user has actually deleted this session.
+ */
+const userGeneration = new Map<string, number>();
 
 /**
  * Same synchronous-paint contract as bitmapFor, but sourced from IndexedDB
@@ -154,14 +162,25 @@ function userBitmapFor(id: string): ImageBitmap | 'loading' | 'missing' {
   if (cached) return cached;
   if (!userLoading.has(id) && typeof createImageBitmap !== 'undefined') {
     userLoading.add(id);
+    const gen = userGeneration.get(id) ?? 0;
+    const superseded = (): boolean => (userGeneration.get(id) ?? 0) !== gen;
     void import('./userBackgrounds')
       .then((m) => m.getUserBackgroundBlob(id))
       .then(async (blob) => {
-        userBitmaps.set(id, blob ? await createImageBitmap(blob) : 'missing');
-        userLoading.delete(id);
+        const decoded = blob ? await createImageBitmap(blob) : 'missing';
+        if (superseded()) {
+          // Evicted while we were decoding: release the bitmap rather than
+          // repopulating the cache for an image the user deleted.
+          if (decoded !== 'missing') decoded.close();
+          return;
+        }
+        userBitmaps.set(id, decoded);
       })
       .catch(() => {
+        if (superseded()) return;
         userBitmaps.set(id, 'missing');
+      })
+      .finally(() => {
         userLoading.delete(id);
       });
   }
@@ -173,6 +192,7 @@ export function evictUserBitmap(id: string): void {
   const cached = userBitmaps.get(id);
   if (cached && cached !== 'missing') cached.close();
   userBitmaps.delete(id);
+  userGeneration.set(id, (userGeneration.get(id) ?? 0) + 1);
 }
 
 /**
