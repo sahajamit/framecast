@@ -95,9 +95,11 @@ Module map: `src/capture` (device acquisition) · `src/audio` (mix graph + meter
 - Voice is studio/broadcast: Roll tape, On air, Stand by, Take, Tape library. e2e selectors follow this voice (`/roll tape/i`, `/recover take/i`).
 - Logo = hardware badge (engraved frame + LED lens, `.fcmark`); the lens goes red on air — header badge AND favicon (`icon.svg` ↔ `icon-onair.svg` swap in App.tsx). README lockups render via `brand/render.mjs`.
 
-## Writing style (README, release notes, anything outward)
+## Writing style (outward-facing docs only)
 
-No em dashes. Use periods, commas, colons or parentheses. (House rule for everything shipped under Amit's byline.)
+Applies to `README.md`, release notes, and anything else shipped under Amit's byline. It does NOT apply to internal engineering docs (this file), code comments, commit messages or PR bodies.
+
+No em dashes. Use periods, commas, colons or parentheses.
 
 ## Phase 2 backlog
 
