@@ -37,23 +37,27 @@ export function CameraBackgroundPicker({
   const fileRef = useRef<HTMLInputElement>(null);
 
   /**
-   * Every object URL we mint, so cleanup can revoke the ones created after a
-   * render as well as the ones from the initial load.
+   * id -> object URL for every thumbnail we mint, so cleanup revokes the ones
+   * created after the initial load too. Keyed by id rather than held in the
+   * `thumbs` state so revoking never depends on a closure's view of it.
    */
-  const urlsRef = useRef<Set<string>>(new Set());
+  const urlsRef = useRef<Map<string, string>>(new Map());
   /** False once unmounted: never mint a URL nothing will ever revoke. */
   const aliveRef = useRef(true);
 
-  function trackUrl(blob: Blob): string {
+  function trackUrl(id: string, blob: Blob): string {
+    const stale = urlsRef.current.get(id);
+    if (stale) URL.revokeObjectURL(stale);
     const url = URL.createObjectURL(blob);
-    urlsRef.current.add(url);
+    urlsRef.current.set(id, url);
     return url;
   }
 
-  function releaseUrl(url: string | undefined): void {
+  function releaseUrl(id: string): void {
+    const url = urlsRef.current.get(id);
     if (!url) return;
     URL.revokeObjectURL(url);
-    urlsRef.current.delete(url);
+    urlsRef.current.delete(id);
   }
 
   // Load the imported gallery + thumbnails. Object URLs are tracked in a ref
@@ -73,7 +77,7 @@ export function CameraBackgroundPicker({
         // has already run cleanup, so a URL minted past this point would
         // never be revoked by anything.
         if (!alive.current) return;
-        if (blob) map.set(e.id, trackUrl(blob));
+        if (blob) map.set(e.id, trackUrl(e.id, blob));
       }
       setThumbs(map);
     })();
@@ -93,7 +97,10 @@ export function CameraBackgroundPicker({
       if (!aliveRef.current) return;
       setUserBgs((prev) => [entry, ...prev]);
       if (blob) {
-        setThumbs((prev) => new Map(prev).set(entry.id, trackUrl(blob)));
+        // Mint outside the updater: React may re-run or discard updater
+        // functions, which would strand or double-create the URL.
+        const url = trackUrl(entry.id, blob);
+        setThumbs((prev) => new Map(prev).set(entry.id, url));
       }
       onChange(entry.id);
     } catch {
@@ -107,10 +114,11 @@ export function CameraBackgroundPicker({
     setUserBgs((prev) => prev.filter((e) => e.id !== id));
     setThumbs((prev) => {
       const next = new Map(prev);
-      releaseUrl(next.get(id));
       next.delete(id);
       return next;
     });
+    // Revoke outside the updater, for the same reason as onImport.
+    releaseUrl(id);
     // Deleting the active backdrop falls back to a neutral built-in.
     if (value === id) onChange('slate');
   }
