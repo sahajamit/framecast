@@ -1,12 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
+ * Lifecycle & concurrency test (CLAUDE.md testing conventions, kind 3).
+ *
+ * Pins: two imports interleaving on the user-background index (issue #18).
+ * Why not e2e: the bug needs a second import to begin between the first
+ * import's index read and its index write. Real Chrome offers no way to
+ * schedule that; the whole point of the fix is that the window closes.
+ *
  * The index is a read-modify-write. idb-keyval's get + set are two separate
  * transactions; update() is one. This mock models exactly that difference:
- * get/set yield to the microtask queue between read and write (so callers
+ * get/set yield a full event-loop turn between read and write (so callers
  * interleave), while update() serialises on a chain the way a single
  * readwrite transaction does. A get-then-set implementation therefore loses
- * an entry here, which is the regression these tests guard (issue #18).
+ * an entry here, which is the regression these tests guard.
  */
 const store = new Map<string, unknown>();
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
