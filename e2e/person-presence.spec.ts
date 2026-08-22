@@ -124,11 +124,21 @@ test.describe('virtual background · person presence', () => {
       );
     const [tl, br, face] = [await sample(0.04, 0.06), await sample(0.96, 0.94), await sample(0.5, 0.4)];
 
-    // Slate is a cool blue-grey (b >= r). If neither corner is slate, no
-    // segmentation tier could run here (raw-camera fallback): skip, don't lie.
-    const isCool = (p: number[]) => p[2]! >= p[0]!;
+    // Slate is a vertical gradient, #4c5661 at the top to #2c343c at the
+    // bottom (cameraBackgrounds.ts). Sampling 6% and 94% down lands within a
+    // couple of levels of those endpoints; the tolerance absorbs H.264 and
+    // 4:2:0 drift. `b >= r` alone was far too loose to mean "slate": pure
+    // black satisfies it, so a blank render read as a valid backdrop and the
+    // test asserted on garbage instead of skipping.
+    const SLATE_TOP = [0x4c, 0x56, 0x61];
+    const SLATE_BOTTOM = [0x2c, 0x34, 0x3c];
+    const TOL = 30;
+    const nearSlate = (p: number[], ref: number[]): boolean =>
+      ref.every((c, i) => Math.abs(p[i]! - c) <= TOL) && p[2]! > p[0]!;
+    // If either corner is not slate, no segmentation tier could run here
+    // (raw-camera fallback): skip, don't lie.
     test.skip(
-      !(isCool(tl) && isCool(br)),
+      !(nearSlate(tl, SLATE_TOP) && nearSlate(br, SLATE_BOTTOM)),
       `segmentation unavailable in this environment (corners rgb(${tl}) rgb(${br}))`,
     );
 
