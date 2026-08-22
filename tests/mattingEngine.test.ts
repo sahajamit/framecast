@@ -2,11 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Inferencer } from '../src/compositor/matting/types';
 
 /**
- * Guards the spawn-epoch invariant (issue #19): a tier change must invalidate
- * any in-flight async model load, including when the engine then declines to
- * spawn because the new tier uses the same model kind. Only the high tier
- * loads asynchronously (dynamic import of ./rvm), so that is the model a
- * stale spawn can wrongly install.
+ * Lifecycle & concurrency test (CLAUDE.md testing conventions, kind 3).
+ *
+ * Pins: a superseded high-tier model load installing itself after the
+ * governor has moved on (issue #19).
+ * Why not e2e: it needs a tier change to land inside the window where
+ * import('./rvm') is in flight, and the high tier is gated off behind
+ * HIGH_TIER_ENABLED, so a real browser never reaches this path at all.
+ *
+ * Only the high tier loads asynchronously (dynamic import of ./rvm), so that
+ * is the model a stale spawn can wrongly install.
  */
 
 let nowMs = 0;

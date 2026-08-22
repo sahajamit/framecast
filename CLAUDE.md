@@ -79,7 +79,11 @@ Module map: `src/capture` (device acquisition) · `src/audio` (mix graph + meter
 - Test hooks live on `window.__framecast` (`src/app/testHook.ts`), only in e2e mode: `listLibrary()`, `inspectFile(name)` (re-opens output with mediabunny and returns duration/codecs — this is how specs assert real file contents), `setFrame(patch)` / `setFocus(patch)` (drive scene framing / live zoom deterministically), `setCameraBackground(patch)` (background mode + matting quality), `sampleTopLeft(name)` and `samplePixel(name, nx, ny)` (decode a frame and read a pixel).
 - `?dbg=seg` overlays the live matting tier + per-stage timings on the preflight stage and logs the recording worker's numbers (`[framecast seg]`) to the console — the way to validate matting performance on hardware we don't own (community Windows reports).
 - CDP `Page.crash` never resolves its promise; send it fire-and-forget (see `e2e/recovery.spec.ts`).
-- Unit tests cover pure math only (layout, BS.1770 loudness with sine reference vectors, encoder presets). Keep them free of DOM/media APIs.
+- **E2E is the default.** Anything user-visible (a backdrop paints, a take records, a control gates) is proven in `e2e/` against real Chrome. Do not simulate it in vitest.
+- Unit tests come in exactly three kinds. Nothing else belongs in `tests/`:
+  1. **Pure math** (layout, BS.1770 loudness with sine reference vectors, encoder presets, mask math). DOM-free and media-free, no exceptions.
+  2. **Component render gating** (`tests/components/*`): jsdom via `// @vitest-environment jsdom` + `@testing-library/react`. Assert what renders, never pixels or media.
+  3. **Lifecycle & concurrency** (cache eviction, engine tier spawns, IndexedDB index writes). These MAY stub browser globals, but only where e2e cannot force the interleaving — a real browser gives you no way to land a deletion between an IndexedDB read and a decode. Every such file opens with a comment naming the race it pins and why e2e cannot reach it, and its test must be shown to fail against the unfixed code.
 
 ## Brand & theming — the CONSOLE system
 
