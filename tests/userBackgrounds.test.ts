@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  *
  * The index is a read-modify-write. idb-keyval's get + set are two separate
  * transactions; update() is one. This mock models exactly that difference:
- * get/set yield to the microtask queue between read and write (so callers
+ * get/set yield a full event-loop turn between read and write (so callers
  * interleave), while update() serialises on a chain the way a single
  * readwrite transaction does. A get-then-set implementation therefore loses
  * an entry here, which is the regression these tests guard.
