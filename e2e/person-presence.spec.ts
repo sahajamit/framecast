@@ -135,7 +135,7 @@ test.describe('virtual background · person presence', () => {
     const TOL = 30;
     const nearSlate = (p: number[], ref: number[]): boolean =>
       ref.every((c, i) => Math.abs(p[i]! - c) <= TOL) && p[2]! > p[0]!;
-    // If neither corner is slate, no segmentation tier could run here
+    // If either corner is not slate, no segmentation tier could run here
     // (raw-camera fallback): skip, don't lie.
     test.skip(
       !(nearSlate(tl, SLATE_TOP) && nearSlate(br, SLATE_BOTTOM)),
