@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Guards the eviction race (issue #22). userBitmapFor kicks off an async
- * IndexedDB read plus a decode; evictUserBitmap can land in between. Without
- * a generation token the in-flight decode repopulates the cache for an image
- * the user has already deleted, so it keeps painting into takes and its
- * ImageBitmap is never closed.
+ * Lifecycle & concurrency test (CLAUDE.md testing conventions, kind 3).
+ *
+ * Pins: a user background deleted while its decode is still in flight
+ * (issue #22).
+ * Why not e2e: the bug needs evictUserBitmap() to land between the
+ * IndexedDB read and createImageBitmap() resolving. Real Chrome gives no
+ * way to schedule a click inside that window, and the fix's whole purpose
+ * is to make the window harmless.
+ *
+ * Without a generation token the in-flight decode repopulates the cache for
+ * an image the user has already deleted, so it keeps painting into takes and
+ * its ImageBitmap is never closed.
  */
 
 let resolveBlob: ((b: Blob | undefined) => void) | null = null;
