@@ -34,20 +34,36 @@ const flush = async (): Promise<void> => {
   for (let i = 0; i < 8; i++) await Promise.resolve();
 };
 
-/** Minimal 2D context: we only care whether an image was actually drawn. */
-function fakeCtx(): { drawn: number } {
-  return {
+/** Records image draws and the gradient stops of every solid fill. */
+function fakeCtx(): { drawn: number; fills: string[][] } {
+  let stops: string[] = [];
+  const self = {
     drawn: 0,
-    drawImage(this: { drawn: number }) {
-      this.drawn++;
+    fills: [] as string[][],
+    drawImage() {
+      self.drawn++;
     },
-    fillRect() {},
+    createLinearGradient() {
+      stops = [];
+      return {
+        addColorStop(_offset: number, color: string) {
+          stops.push(color);
+        },
+      };
+    },
+    fillRect() {
+      self.fills.push([...stops]);
+    },
+    fillStyle: '' as unknown,
     save() {},
     restore() {},
-    createLinearGradient: () => ({ addColorStop() {} }),
-    fillStyle: '',
-  } as unknown as { drawn: number };
+  };
+  return self as unknown as { drawn: number; fills: string[][] };
 }
+
+/** Mirrors LOADING_FILL / MISSING_FILL in cameraBackgrounds.ts. */
+const LOADING_FILL = ['#3a3f45', '#191c1f'];
+const MISSING_FILL = ['#4c5661', '#2c343c'];
 
 const BOX = { x: 0, y: 0, w: 100, h: 100 };
 
@@ -72,6 +88,7 @@ describe('user background cache eviction', () => {
     paintCameraBackgroundFill(ctx as never, BOX, id as never);
     await flush(); // let the dynamic import land and the DB read start
     expect(resolveBlob).not.toBeNull();
+    expect(ctx.fills.at(-1)).toEqual(LOADING_FILL);
 
     // User deletes the background while the decode is still in flight.
     evictUserBitmap(id);
@@ -81,12 +98,19 @@ describe('user background cache eviction', () => {
 
     // The superseded decode must be closed, not cached.
     expect(closed).toBe(1);
+    expect(ctx.drawn).toBe(0);
 
-    // And the cache must not serve it: painting again reports 'loading'
-    // (a fresh load), never the resurrected bitmap.
-    const before = ctx.drawn;
+    // The cache must not serve it. Painting again starts a fresh load, which
+    // now finds nothing in IndexedDB, so the id settles on the 'missing'
+    // solid rather than resurrecting the deleted image.
     paintCameraBackgroundFill(ctx as never, BOX, id as never);
-    expect(ctx.drawn).toBe(before);
+    await flush();
+    resolveBlob!(undefined);
+    await flush();
+
+    paintCameraBackgroundFill(ctx as never, BOX, id as never);
+    expect(ctx.drawn).toBe(0);
+    expect(ctx.fills.at(-1)).toEqual(MISSING_FILL);
   });
 
   it('caches and paints a decode that is not evicted', async () => {
