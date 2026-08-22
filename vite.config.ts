@@ -34,7 +34,12 @@ export default defineConfig({
             options: {
               cacheName: 'framecast-matting-high',
               expiration: { maxEntries: 8 },
-              cacheableResponse: { statuses: [0, 200] },
+              // 200 only. Status 0 is an opaque cross-origin response, and
+              // every URL this route matches is same-origin by design (see
+              // netlify.toml COOP/COEP). Allowing 0 would let a failed or
+              // opaque fetch be cached as the ORT runtime and served back
+              // broken across reloads.
+              cacheableResponse: { statuses: [200] },
             },
           },
         ],
